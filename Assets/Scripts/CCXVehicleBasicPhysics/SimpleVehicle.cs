@@ -2,9 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using CCXUnityVehicle;
 
 [DefaultExecutionOrder(100)]
-
 public class SimpleVehicle : MonoBehaviour
 {
     public VehicleProperties m_vehicleProperties;
