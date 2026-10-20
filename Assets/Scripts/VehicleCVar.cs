@@ -8,23 +8,25 @@ public static class VehicleCVars
     //        false,
     //        "Draw vehicle debug. ");
 
-    public static readonly CVar<bool> DrawVehicleDebug =
+    [CVar("Vehicle.Control", "Draw vehicle control debug. ")]
+    public static readonly CVar<bool> DrawVehicleControlDebug =
         CVarRegistry.Register(
-            "vehicle.drawVehicleDebug",
+            "vehicle.control.drawVehicleDebug",
             false,
-            "Draw vehicle debugs.");
+            "Draw vehicle control debug.");
 
-    public static readonly CVar<bool> DrawWheelDebug =
+    [CVar("Vehicle.Control", "Draw vehicle control wheel debug. ")]
+    public static readonly CVar<bool> DrawWheelControlDebug =
         CVarRegistry.Register(
-            "vehicle.drawWheelDebug",
+            "vehicle.control.drawWheelDebug",
             false,
-            "Draw wheel debugs.");
+            "Draw vehicle control wheel debugs.");
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void RegisterCVars()
     {
         //_ = DrawDebug; 
-        _ = DrawVehicleDebug;
-        _ = DrawWheelDebug; 
+        _ = DrawVehicleControlDebug;
+        _ = DrawWheelControlDebug; 
     }
 }

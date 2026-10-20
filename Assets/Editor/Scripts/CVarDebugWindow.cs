@@ -1,74 +1,60 @@
+using System;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
-public class CVarConsole : MonoBehaviour
+public class CVarDebugWindow : EditorWindow
 {
-    public static CVarConsole Instance { get; set; }
-
-    public bool IsOpen { get { return open; } }
-
     private string input = "";
-    private bool open;
     private Vector2 _scroll;
-    private CursorLockMode _previousLockState;
-    private bool _previousCursorVisible;
     private readonly Dictionary<string, string> _editBuffers = new();
 
-    // Bootstrap to auto create on scene load
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    static void Bootstrap()
+    private void OnEnable()
     {
-        var go = new GameObject("[CVar Console]");
-        go.AddComponent<CVarConsole>();
-        DontDestroyOnLoad(go);
-
-        Instance = go.GetComponent<CVarConsole>();
+        CVarDiscovery.Discover();
+        CVarConfig.Loaded += RefreshValues;
+        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
     }
 
-    private void Update()
+    private void OnDisable()
     {
-        if (Input.GetKeyDown(KeyCode.BackQuote))
-        {
-            SetOpen(!open);
-        }
+        CVarConfig.Loaded -= RefreshValues;
+        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
     }
 
-    private void SetOpen(bool newOpen)
+    private void OnPlayModeStateChanged(PlayModeStateChange state) => RefreshValues();
+
+    private void RefreshValues()
     {
-        if (open == newOpen)
-            return;
+        _editBuffers.Clear();
+        Repaint();
+    }
 
-        open = newOpen;
-
-        if (open)
-        {
-            _previousLockState = Cursor.lockState;
-            _previousCursorVisible = Cursor.visible;
-
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
-        else
-        {
-            Cursor.lockState = _previousLockState;
-            Cursor.visible = _previousCursorVisible;
-        }
+    [MenuItem("Tools/CVar/Open Window")]
+    public static void Open()
+    {
+        GetWindow<CVarDebugWindow>("CVar");
     }
 
     private void OnGUI()
     {
-        if (!open)
-            return;
-
         GUILayout.BeginArea(new Rect(10, 10, 600, 300), GUI.skin.box);
 
         GUILayout.Label("CVar Console");
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Save Config"))
+            CVarConfig.Save();
+        if (GUILayout.Button("Load Config"))
+            CVarConfig.Load();
+        GUILayout.EndHorizontal();
 
         input = GUILayout.TextField(input);
 
         if (GUILayout.Button("Execute"))
         {
             Execute(input);
+            RefreshValues();
             input = "";
         }
 
@@ -132,7 +118,7 @@ public class CVarConsole : MonoBehaviour
 
     private static void Execute(string command)
     {
-        string[] parts = command.Split(' ', 2);
+        string[] parts = command.Split(new[] { ' ' }, 2, StringSplitOptions.None);
 
         if (parts.Length != 2)
         {

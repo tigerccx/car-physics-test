@@ -58,8 +58,7 @@ public class B3DSimplePlayer : MonoBehaviour
     {
         ReadInput();
 
-        if(!CVarConsole.Instance.IsOpen)
-        { HandleLook(); }
+        HandleLook();
     }
 
     private void FixedUpdate()

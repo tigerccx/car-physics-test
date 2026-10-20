@@ -34,7 +34,13 @@ public sealed class CVar<T> : ICVar
 
     public string GetString()
     {
-        return Value?.ToString();
+        if (Value is float single)
+            return single.ToString("R", CultureInfo.InvariantCulture);
+        if (Value is double number)
+            return number.ToString("R", CultureInfo.InvariantCulture);
+        return Value is IFormattable formattable
+            ? formattable.ToString(null, CultureInfo.InvariantCulture)
+            : Value?.ToString() ?? string.Empty;
     }
 
     public bool SetString(string text)
@@ -87,6 +93,14 @@ public sealed class CVar<T> : ICVar
             {
                 parsedValue = floatValue;
                 value = (T)parsedValue;
+                return true;
+            }
+        }
+        else if (type == typeof(double))
+        {
+            if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double doubleValue))
+            {
+                value = (T)(object)doubleValue;
                 return true;
             }
         }

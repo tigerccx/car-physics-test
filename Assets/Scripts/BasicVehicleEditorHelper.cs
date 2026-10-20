@@ -88,8 +88,8 @@ public class BasicVehicleEditorHelper : MonoBehaviour
             fontSize = 8
         };
 
-        bool bDrawVehicleDebug = VehicleCVars.DrawVehicleDebug.Value;
-        bool bDrawWheelDebug = VehicleCVars.DrawWheelDebug.Value;
+        bool bDrawVehicleDebug = VehicleCVars.DrawVehicleControlDebug.Value;
+        bool bDrawWheelDebug = VehicleCVars.DrawWheelControlDebug.Value;
 
         if (bDrawVehicleDebug)
         {

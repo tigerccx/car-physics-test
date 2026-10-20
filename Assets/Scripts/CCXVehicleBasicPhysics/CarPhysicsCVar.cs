@@ -2,28 +2,35 @@ using UnityEngine;
 
 public static class CCXVehicleCVars
 {
+    [CVar("Vehicle", "Draw vehicle debug")]
     public static readonly CVar<bool> DrawDebug =
         CVarRegistry.Register(
             "vehicle.drawDebug",
             false,
             "Draw vehicle debug. ");
 
+    [CVar("Vehicle", "Draw suspension debug")]
     public static readonly CVar<bool> DrawSuspensionDebug =
         CVarRegistry.Register(
             "vehicle.drawSuspensionDebug",
             false,
-            "Draw suspension debugs.");
+            "Draw suspension debug.");
+
+    [CVar("Vehicle", "Draw suspension debug in scale")]
     public static readonly CVar<float> DrawSuspensionDebugScale =
         CVarRegistry.Register(
             "vehicle.drawSuspensionDebugScale",
             0.1f,
             "Draw suspension debugs in scale.");
 
+    [CVar("Vehicle", "Draw wheel debug")]
     public static readonly CVar<bool> DrawWheelDebug =
         CVarRegistry.Register(
             "vehicle.drawWheelDebug",
             false,
-            "Draw wheel debugs.");
+            "Draw wheel debug.");
+
+    [CVar("Vehicle", "Draw wheel debug in scale")]
     public static readonly CVar<float> DrawWheelDebugScale =
         CVarRegistry.Register(
             "vehicle.drawWheelDebugScale",
