@@ -920,8 +920,8 @@ MonoBehaviour:
   m_wheelProperties:
     m_mass: 25
     m_wheelRadius: 0.5
-    m_gripScale: 1
-    m_slipAngleToGripCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
+    m_gripScale: 0.1
+    m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
     m_staticFrictionCoeff: 1.5
     m_laterlCounterScale: 1
@@ -1624,8 +1624,8 @@ MonoBehaviour:
   m_wheelProperties:
     m_mass: 25
     m_wheelRadius: 0.5
-    m_gripScale: 1
-    m_slipAngleToGripCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
+    m_gripScale: 0.1
+    m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
     m_staticFrictionCoeff: 1.5
     m_laterlCounterScale: 1
@@ -4787,8 +4787,8 @@ MonoBehaviour:
   m_wheelProperties:
     m_mass: 25
     m_wheelRadius: 0.5
-    m_gripScale: 1
-    m_slipAngleToGripCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
+    m_gripScale: 0.1
+    m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
     m_staticFrictionCoeff: 1.5
     m_laterlCounterScale: 1
@@ -5341,8 +5341,8 @@ MonoBehaviour:
   m_wheelProperties:
     m_mass: 25
     m_wheelRadius: 0.5
-    m_gripScale: 1
-    m_slipAngleToGripCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
+    m_gripScale: 0.1
+    m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
     m_staticFrictionCoeff: 1.5
     m_laterlCounterScale: 1

@@ -65,7 +65,7 @@ public class B3DSimplePlayer : MonoBehaviour
     private void FixedUpdate()
     {
         grounded = CheckGrounded();
-        Debug.Log($"{grounded}");
+        //Debug.Log($"{grounded}");
 
         ApplyRotation();
         ApplyMovement();
@@ -112,7 +112,6 @@ public class B3DSimplePlayer : MonoBehaviour
     private void ApplyRotation()
     {
         Quaternion targetRotation = Quaternion.Euler(0.0f, yaw, 0.0f);
-        Debug.Log($"yaw: {yaw}");
         b3dBody.MoveRotation(targetRotation);
     }
 

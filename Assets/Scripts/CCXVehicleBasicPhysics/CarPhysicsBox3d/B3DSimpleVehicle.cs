@@ -1,10 +1,10 @@
+using B3DVehicle;
 using Box3D;
 using Box3D.Hybrid;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using B3DVehicle;
 
 [DefaultExecutionOrder(100)]
 
@@ -102,8 +102,8 @@ public class B3DSimpleVehicle : MonoBehaviour
         //print(new string('-', 100));
     }
 
-    private void OnPreIntegratePositions(in Body body, ref Vector3 velocity, ref Vector3 angularVelocity,
-        ref Vector3 deltaPosition, ref Quaternion deltaRotation, float subStepDeltaTime)
+    private void OnPreIntegratePositions(in Body body,
+        in Vector3 deltaPosition, in Quaternion deltaRotation, float subStepDeltaTime)
     {
         //TODO: Temp Context. Patch in Control
         VehicleContext context = new VehicleContext();
@@ -120,8 +120,7 @@ public class B3DSimpleVehicle : MonoBehaviour
                 Wheel wheel = m_wheels[i];
 
                 VehiclePhysics.UpdateWheelAndApplyToVehicle_SubStep_PrePosIntegration(
-                    ref velocity, ref angularVelocity,
-                    ref deltaPosition, ref deltaRotation, subStepDeltaTime,
+                    in deltaPosition, in deltaRotation, subStepDeltaTime,
                     context,
                     suspension.m_suspensionProperties,
                     wheel.m_wheelProperties,

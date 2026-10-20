@@ -303,8 +303,7 @@ namespace B3DVehicle
         }
 
         public static void UpdateWheelAndApplyToVehicle_SubStep_PrePosIntegration(
-            ref Vector3 velocity, ref Vector3 angularVelocity,
-            ref Vector3 deltaPosition, ref Quaternion deltaRotation, float subStepDeltaTime,
+            in Vector3 deltaPosition, in Quaternion deltaRotation, float subStepDeltaTime,
             in VehicleContext context,
             in SuspensionProperties suspensionProperties,
             in WheelProperties wheelProperties,
@@ -312,6 +311,8 @@ namespace B3DVehicle
             ref WheelState wheelState,
             ref VehicleState vehicleState)
         {
+            Vector3 velocity = vehicleState.m_b3dBody.linearVelocity;
+            Vector3 angularVelocity = vehicleState.m_b3dBody.angularVelocity;
             CalculateWheelLateralForce(
                 ref velocity, ref angularVelocity, 
                 context, wheelProperties, vehicleState, suspensionState, ref wheelState);
