@@ -46,6 +46,8 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     private float throttleInput;
     private float steeringInput;
 
+    private System.Random m_random = new System.Random();
+
     //Debug
     [Header("Debug")]
     public float m_debugDrawScale = 0.1f;
@@ -304,20 +306,22 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     {
         // This is already a substep on Box3D level (if configured)
         // But more substeps for wheel simulation itself
-        
+
         int countIterWheel = 4; //More wheel substep
         float dividedSubStepDeltaTime = subStepDeltaTime / countIterWheel;
         for (int iterWheel = 0; iterWheel < countIterWheel; ++iterWheel)
         {
-            for (int i = 0; i < m_suspensions.Count; ++i)
+            foreach (int idx in Enumerable.Range(0, 4).OrderBy(x => m_random.Next()))
+                //for (int i = 0; i < m_suspensions.Count; ++i)
             {
-                int idx = (iterWheel + i) % m_suspensions.Count;
+                //int idx = (iterWheel + i) % m_suspensions.Count;
 
-                Suspension suspension = m_suspensions[i];
-                Wheel wheel = m_wheels[i];
+                Suspension suspension = m_suspensions[idx];
+                Wheel wheel = m_wheels[idx];
 
                 VehiclePhysics.UpdateWheelSubstep(
-                    in deltaPosition, in deltaRotation, dividedSubStepDeltaTime,
+                    in deltaPosition, in deltaRotation, 
+                    dividedSubStepDeltaTime,
                     m_vehicleContext,
                     suspension.m_suspensionProperties,
                     wheel.m_wheelProperties,

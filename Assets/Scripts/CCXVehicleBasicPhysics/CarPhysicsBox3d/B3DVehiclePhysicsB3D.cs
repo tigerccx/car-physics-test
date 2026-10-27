@@ -269,7 +269,7 @@ namespace B3DVehicle
             float impulseRequiredToCounterSlip = forwardSlipVelocity / (1 / effectiveMassAtContact + radWheel * radWheel / wheelInertia);
 
             //Non-slip情况下，维持non-slip所需要的impulse
-            float impulseDrive = angularImpulse / (radWheel + (wheelInertia / effectiveMassAtContact));
+            float impulseDrive = angularImpulse / (radWheel + (wheelInertia / (effectiveMassAtContact * radWheel)));
 
             //两者合并为non slip所需的impulse
             float desiredLongitudinalImpulse = impulseDrive + impulseRequiredToCounterSlip;
@@ -324,13 +324,13 @@ namespace B3DVehicle
 
         private static void IntegrateWheelTransitionalStates(in WheelProperties wheelProperties, ref WheelState wheelState)
         {
-            wheelState.m_desiredLateralImpulse = wheelState.m_transitional.m_accumDesiredLateralImpulse / wheelState.m_transitional.m_accumDT;
-            wheelState.m_desiredLongitudinalImpulse = wheelState.m_transitional.m_accumDesiredLongitudinalImpulse / wheelState.m_transitional.m_accumDT;
+            wheelState.m_desiredLateralImpulse = wheelState.m_transitional.m_accumDesiredLateralImpulse;
+            wheelState.m_desiredLongitudinalImpulse = wheelState.m_transitional.m_accumDesiredLongitudinalImpulse;
 
-            wheelState.m_availableGripImpulse = wheelState.m_transitional.m_accumAvailableGripImpulse / wheelState.m_transitional.m_accumDT;
+            wheelState.m_availableGripImpulse = wheelState.m_transitional.m_accumAvailableGripImpulse;
 
-            wheelState.m_currentLateralImpulse = wheelState.m_transitional.m_accumGeneratedLateralImpulse / wheelState.m_transitional.m_accumDT;
-            wheelState.m_currentLongitudinalImpulse = wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse / wheelState.m_transitional.m_accumDT;
+            wheelState.m_currentLateralImpulse = wheelState.m_transitional.m_accumGeneratedLateralImpulse;
+            wheelState.m_currentLongitudinalImpulse = wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse;
 
             wheelState.m_currentAngularVelocity = wheelState.m_transitional.m_angularVelocity;
         }
@@ -438,7 +438,8 @@ namespace B3DVehicle
         }
 
         public static void UpdateWheelSubstep(
-            in Vector3 deltaPosition, in Quaternion deltaRotation, float subStepDeltaTime,
+            in Vector3 deltaPosition, in Quaternion deltaRotation, 
+            float subStepDeltaTime, 
             in VehicleContext context,
             in SuspensionProperties suspensionProperties,
             in WheelProperties wheelProperties,
