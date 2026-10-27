@@ -7,6 +7,9 @@ using UnityEngine;
 public class VehicleDebugWindow : EditorWindow
 {
     [SerializeField] private B3DSimpleVehicle selectedVehicle;
+    [SerializeField] private float defaultTractionImpulse = 100f;
+    private GUISkin compactSkin;
+    private GUIStyle compactBold, compactBoldTitle, compactMini, compactMiniBold, compactMiniBoldTitle, compactWhite, compactPanel;
     private Vector2 scroll;
     private double nextRepaintTime;
     private DebugData data = new DebugData();
@@ -24,13 +27,14 @@ public class VehicleDebugWindow : EditorWindow
 
     private void OnEnable()
     {
-        minSize = new Vector2(760f, 650f);
+        minSize = new Vector2(660f, 520f);
         EditorApplication.update += OnEditorUpdate;
     }
 
     private void OnDisable()
     {
         EditorApplication.update -= OnEditorUpdate;
+        if (compactSkin) DestroyImmediate(compactSkin);
     }
 
     private void OnEditorUpdate()
@@ -42,6 +46,47 @@ public class VehicleDebugWindow : EditorWindow
     }
 
     private void OnGUI()
+    {
+        if (!compactSkin)
+        {
+            compactSkin = Instantiate(GUI.skin);
+            compactSkin.hideFlags = HideFlags.HideAndDontSave;
+            compactSkin.label = CompactStyle(GUI.skin.label);
+            compactBold = CompactStyle(EditorStyles.boldLabel);
+            compactBoldTitle = CompactStyle(EditorStyles.boldLabel);
+            compactBoldTitle.alignment = TextAnchor.MiddleCenter;
+            compactMini = CompactStyle(EditorStyles.miniLabel);
+            compactMiniBold = CompactStyle(EditorStyles.miniBoldLabel);
+            compactMiniBoldTitle = CompactStyle(EditorStyles.miniBoldLabel);
+            compactMiniBoldTitle.alignment = TextAnchor.MiddleCenter;
+            compactWhite = CompactStyle(EditorStyles.whiteMiniLabel);
+            compactPanel = new GUIStyle(EditorStyles.helpBox)
+            {
+                padding = new RectOffset(4, 4, 3, 3),
+                margin = new RectOffset(2, 2, 2, 2)
+            };
+        }
+        GUISkin previous = GUI.skin;
+        try
+        {
+            GUI.skin = compactSkin;
+            DrawWindowGUI();
+        }
+        finally { GUI.skin = previous; }
+    }
+
+    private static GUIStyle CompactStyle(GUIStyle source)
+    {
+        return new GUIStyle(source)
+        {
+            fontSize = 10,
+            fixedHeight = 13f,
+            margin = new RectOffset(1, 1, 0, 0),
+            padding = new RectOffset(0, 0, 0, 0)
+        };
+    }
+
+    private void DrawWindowGUI()
     {
         DrawVehicleSelector();
         if (!selectedVehicle)
@@ -56,10 +101,25 @@ public class VehicleDebugWindow : EditorWindow
             ? "Live physics data. Arrows show direction only. -- means unavailable. Wheels map by local mount positions."
             : "Enter Play mode with an initialized Box3D body. -- means unavailable; wheel poses are schematic.",
             MessageType.Info);
-        Rect diagram = GUILayoutUtility.GetRect(720f, 310f, GUILayout.ExpandWidth(true));
-        DrawDiagram(diagram);
+        Rect diagram = GUILayoutUtility.GetRect(630f, 220f, GUILayout.ExpandWidth(true));
+        // Keep the diagram near the vehicle rather than distributing it across a wide window.
+        float vehicleWidth = Mathf.Min(360f, diagram.width - 240f);
+        Rect vehicleRect = new Rect(diagram.x, diagram.y, vehicleWidth, diagram.height);
+        DrawDiagram(vehicleRect);
+        DrawTractionCircles(new Rect(vehicleRect.xMax + 8f, diagram.y, 232f, diagram.height));
         EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.BeginVertical(GUILayout.Width(210f));
         DrawVehicleData();
+        EditorGUILayout.BeginVertical(compactPanel, GUILayout.ExpandHeight(false));
+        GUILayout.Label("---Debug Config---", compactBoldTitle);
+        GUILayout.Label("Default traction impulse (N·s)");
+        float configured = EditorGUILayout.FloatField(defaultTractionImpulse, "F3");
+        defaultTractionImpulse = float.IsNaN(configured) || float.IsInfinity(configured) ? 100f : Mathf.Max(0.00001f, configured);
+        GUILayout.Label("Display reference only", compactMini);
+        EditorGUILayout.EndVertical();
+        // Absorb the wheel columns' extra height outside the Config panel.
+        GUILayout.FlexibleSpace();
+        EditorGUILayout.EndVertical();
         EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true));
         EditorGUILayout.BeginHorizontal();
         DrawWheelData(0);
@@ -122,6 +182,7 @@ public class VehicleDebugWindow : EditorWindow
         Vector3 velocity = body.linearVelocity;
         Vector3 angularVelocity = body.angularVelocity;
         target.Speed = velocity.magnitude;
+        target.SpeedKmH = target.Speed * 3.6f;
         target.WorldDirection = velocity.normalized;
         target.LocalVelocity = vehicleTransform.InverseTransformDirection(velocity);
         target.AngularSpeed = angularVelocity.magnitude;
@@ -174,6 +235,18 @@ public class VehicleDebugWindow : EditorWindow
             result.SlipAngle = wheelState.m_currentSlipAngle; // Already in degrees.
             result.TurnAngle = Mathf.Atan2(result.LocalForward.x, result.LocalForward.z) * Mathf.Rad2Deg;
             result.LateralImpulse = wheelState.m_currentLateralImpulse;
+            result.DesiredLateral = wheelState.m_desiredLateralImpulse;
+            result.Longitudinal = wheelState.m_currentLongitudinalImpulse;
+            result.DesiredLongitudinal = wheelState.m_desiredLongitudinalImpulse;
+            result.AvailableGrip = Mathf.Max(0f, wheelState.m_availableGripImpulse);
+            result.UsedGrip = new Vector2(result.LateralImpulse, result.Longitudinal).magnitude;
+            result.LinearSpeed = wheelState.m_currentAngularVelocity * wheel.m_wheelProperties.m_wheelRadius;
+            result.GroundSpeed = wheelState.m_currentVelocityLongitudinal;
+            result.SlipRatio = wheelState.m_currentSlipRatio;
+            result.Torque = wheelState.m_currentTorque;
+            result.Load = Mathf.Max(0f, suspensionState.m_currentSuspensionForce);
+            result.LateralSign = Vector3.Dot(wheelState.m_currentDirLateral_ws,
+                vehicleTransform.TransformDirection(Vector3.Cross(Vector3.up, result.LocalForward))) >= 0f ? 1f : -1f;
             result.AxialVelocity = suspensionState.m_currentSuspensionVelocity;
             result.Length = suspensionState.m_currentSuspensionLength;
             result.Grounded = suspensionState.m_isGrounded;
@@ -190,38 +263,49 @@ public class VehicleDebugWindow : EditorWindow
 
     private void DrawVehicleData()
     {
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.Width(270f), GUILayout.MinHeight(480f));
-        GUILayout.Label("Vehicle", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(compactPanel, GUILayout.Width(210f), GUILayout.MinHeight(250f));
+        GUILayout.Label("---Vehicle---", compactBoldTitle);
         Value("Speed (m/s)", data.Speed);
+        Value("Speed (km/h)", data.SpeedKmH);
         VectorValue("Direction (world, unit vector)", data.WorldDirection);
         Value("Local XZ speed (m/s)", new Vector2(data.LocalVelocity.x, data.LocalVelocity.z).magnitude);
         Value("Angular speed (rad/s)", data.AngularSpeed);
         VectorValue("Rotation axis (world, unit vector)", data.WorldRotationAxis);
         Value("Local Y angular speed (rad/s)", data.LocalYawSpeed);
-        GUILayout.Space(12f);
-        GUILayout.Label("Diagram", EditorStyles.boldLabel);
+        GUILayout.Space(5f);
+        GUILayout.Label("---Diagram---", compactBoldTitle);
         GUILayout.Label("Top: local +Z    Right: local +X");
         Legend("North (world +Z)", NorthColor);
         Legend("Wheel forward", WheelColor);
         Legend("Local XZ velocity", VelocityColor);
         Legend("Local Y rotation", YawColor);
-        GUILayout.Label("Arrow lengths are normalized.", EditorStyles.miniLabel);
+        GUILayout.Label("Arrow lengths are normalized.", compactMini);
         EditorGUILayout.EndVertical();
     }
 
     private void DrawWheelData(int index)
     {
         WheelDebugData wheel = data.Wheels[index];
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.MinWidth(230f), GUILayout.ExpandWidth(true));
-        GUILayout.Label(WheelNames[index], EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(compactPanel, GUILayout.MinWidth(205f), GUILayout.ExpandWidth(true));
+        GUILayout.Label($"---{WheelNames[index]}---", compactBoldTitle);
         if (!wheel.HasPhysicsData)
-            GUILayout.Label(data.HasPhysicsData ? wheel.Status : "Physics unavailable", EditorStyles.miniLabel);
-        GUILayout.Label("Wheel Data", EditorStyles.miniBoldLabel);
-        Value("Slip angle (deg)", wheel.SlipAngle, wheel.HasPhysicsData);
-        Value("Lateral impulse (N·s)", wheel.LateralImpulse, wheel.HasPhysicsData);
+            GUILayout.Label(data.HasPhysicsData ? wheel.Status : "Physics unavailable", compactMini);
+        GUILayout.Label("Wheel Data", compactMiniBoldTitle);
         Value("Turn angle (deg)", wheel.TurnAngle, wheel.HasPhysicsData);
-        GUILayout.Space(5f);
-        GUILayout.Label("Suspension Data", EditorStyles.miniBoldLabel);
+        Value("Slip angle (deg)", wheel.SlipAngle, wheel.HasPhysicsData);
+        DrawImpulsePair("Lateral impulse (N·s)", wheel.LateralImpulse, wheel.DesiredLateral, wheel.HasPhysicsData);
+        GUILayout.Space(2f);
+        Value("Linear V (m/s)", wheel.LinearSpeed, wheel.HasPhysicsData);
+        Value("Ground V (m/s)", wheel.GroundSpeed, wheel.HasPhysicsData);
+        Value("Slip ratio (unitless)", wheel.SlipRatio, wheel.HasPhysicsData);
+        Value("Torque (N·m)", wheel.Torque, wheel.HasPhysicsData);
+        DrawImpulsePair("Longitudinal impulse (N·s)", wheel.Longitudinal, wheel.DesiredLongitudinal, wheel.HasPhysicsData);
+        GUILayout.Space(2f);
+        Value("Load (N)", wheel.Load, wheel.HasPhysicsData);
+        Value("Available grip (N·s)", wheel.AvailableGrip, wheel.HasPhysicsData);
+        Value("Used grip (N·s)", wheel.UsedGrip, wheel.HasPhysicsData);
+        GUILayout.Space(2f);
+        GUILayout.Label("Suspension Data", compactMiniBoldTitle);
         Value("Axial velocity (m/s)", wheel.AxialVelocity, wheel.HasPhysicsData);
         Value("Length (m)", wheel.Length, wheel.HasPhysicsData);
         Value("Mount to ground (m)", wheel.GroundDistance, wheel.HasPhysicsData && wheel.Grounded);
@@ -229,6 +313,13 @@ public class VehicleDebugWindow : EditorWindow
         Value("Suspension force (N)", wheel.SuspensionForce, wheel.HasPhysicsData);
         Row("Grounded", wheel.HasPhysicsData ? (wheel.Grounded ? "Yes" : "No") : "--");
         EditorGUILayout.EndVertical();
+    }
+
+    private void DrawImpulsePair(string label, float actual, float desired, bool available)
+    {
+        GUILayout.Label(label + " (actual / desired)");
+        GUILayout.Label(data.HasPhysicsData && available
+            ? Format(actual) + " / " + Format(desired) : "--");
     }
 
     private void Value(string label, float value, bool available = true)
@@ -240,10 +331,10 @@ public class VehicleDebugWindow : EditorWindow
     {
         GUILayout.Label(label);
         GUILayout.Label(data.HasPhysicsData
-            ? $"({Format(value.x)}, {Format(value.y)}, {Format(value.z)})" : "--", EditorStyles.miniLabel);
+            ? $"({Format(value.x)}, {Format(value.y)}, {Format(value.z)})" : "--", compactMini);
     }
 
-    private static string Format(float value) => value.ToString("F5", CultureInfo.InvariantCulture);
+    private static string Format(float value) => value.ToString("F3", CultureInfo.InvariantCulture);
 
     private static void Row(string label, string value)
     {
@@ -254,10 +345,10 @@ public class VehicleDebugWindow : EditorWindow
         EditorGUILayout.EndHorizontal();
     }
 
-    private static void Legend(string label, Color color)
+    private void Legend(string label, Color color)
     {
-        Rect rect = GUILayoutUtility.GetRect(12f, 20f);
-        EditorGUI.DrawRect(new Rect(rect.x, rect.y + 5f, 9f, 9f), color);
+        Rect rect = GUILayoutUtility.GetRect(12f, 14f);
+        EditorGUI.DrawRect(new Rect(rect.x, rect.y + 3f, 7f, 7f), color);
         GUI.Label(new Rect(rect.x + 16f, rect.y, rect.width - 16f, rect.height), label);
     }
 
@@ -266,49 +357,39 @@ public class VehicleDebugWindow : EditorWindow
         if (Event.current.type != EventType.Repaint) return;
         EditorGUI.DrawRect(rect, new Color(0.12f, 0.13f, 0.15f));
         Vector2 center = rect.center;
-        Rect body = new Rect(center.x - 57f, center.y - 108f, 114f, 216f);
-        GUI.Box(body, GUIContent.none, EditorStyles.helpBox);
-        GUI.Label(new Rect(center.x - 28f, body.y + 8f, 80f, 20f), "FRONT", EditorStyles.whiteMiniLabel);
-        GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, 400f, 20f), "Vehicle local XZ plane (direction only)", EditorStyles.whiteMiniLabel);
+        Rect body = new Rect(center.x - 50f, center.y - 75f, 100f, 150f);
+        GUI.Box(body, GUIContent.none, compactPanel);
+        GUI.Label(new Rect(center.x - 16f, body.y + 8f, 80f, 20f), "FRONT", compactWhite);
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, 400f, 20f), "Vehicle local XZ plane (direction only)", compactWhite);
         Handles.BeginGUI();
         Color previous = Handles.color;
         try
         {
-            Vector2 northOrigin = new Vector2(rect.x + 85f, center.y);
-            Arrow(northOrigin, Project(data.LocalNorth), 60f, NorthColor);
-            GUI.Label(new Rect(northOrigin.x - 65f, northOrigin.y + 68f, 180f, 32f),
-                Project(data.LocalNorth).sqrMagnitude > 0.000001f ? "North (world +Z)" : "North: XZ projection is zero", EditorStyles.whiteMiniLabel);
+            Vector2 northOrigin = new Vector2(rect.x + 60f, center.y);
+            Arrow(northOrigin, Project(data.LocalNorth), 50f, NorthColor);
+            GUI.Label(new Rect(northOrigin.x - 45f, northOrigin.y + 68f, 180f, 32f),
+                Project(data.LocalNorth).sqrMagnitude > 0.000001f ? "North (world +Z)" : "North: XZ projection is zero", compactWhite);
             for (int i = 0; i < 4; i++)
             {
-                Vector2 wheelCenter = center + new Vector2(i % 2 == 0 ? -59f : 59f, i < 2 ? -70f : 70f);
+                Vector2 wheelCenter = center + new Vector2(i % 2 == 0 ? -45f : 45f, i < 2 ? -50f : 50f);
                 Vector2 forward = Project(data.Wheels[i].LocalForward).normalized;
                 if (forward.sqrMagnitude < 0.000001f) forward = Vector2.up * -1f;
                 Vector2 side = new Vector2(-forward.y, forward.x) * 10f;
-                Vector2 along = forward * 23f;
+                Vector2 along = forward * 17f;
                 Handles.color = WheelColor;
                 Handles.DrawAAPolyLine(2f, wheelCenter - side - along, wheelCenter + side - along,
                     wheelCenter + side + along, wheelCenter - side + along, wheelCenter - side - along);
-                Arrow(wheelCenter, forward, 52f, WheelColor);
-                GUI.Label(new Rect(wheelCenter.x - 10f, wheelCenter.y + 25f, 40f, 20f),
-                    new[] { "LF", "RF", "LR", "RR" }[i], EditorStyles.whiteMiniLabel);
+                Arrow(wheelCenter, forward, 38f, WheelColor);
+                GUI.Label(new Rect(wheelCenter.x - 5f, wheelCenter.y + 25f, 40f, 20f),
+                    new[] { "LF", "RF", "LR", "RR" }[i], compactWhite);
             }
             if (data.HasPhysicsData)
             {
-                Arrow(center, Project(data.LocalVelocity), 72f, VelocityColor);
+                Arrow(center, Project(data.LocalVelocity), 55f, VelocityColor);
                 if (Mathf.Abs(data.LocalYawSpeed) > 0.000001f)
                 {
-                    float sign = Mathf.Sign(data.LocalYawSpeed);
-                    Vector2 arcCenter = center + new Vector2(165f, 0f);
-                    Vector3[] points = new Vector3[33];
-                    for (int i = 0; i < points.Length; i++)
-                    {
-                        float angle = (-120f + sign * 240f * i / (points.Length - 1)) * Mathf.Deg2Rad;
-                        points[i] = arcCenter + new Vector2(Mathf.Sin(angle), -Mathf.Cos(angle)) * 38f;
-                    }
-                    Handles.color = YawColor;
-                    Handles.DrawAAPolyLine(3f, points);
-                    Arrow(points[31], points[32] - points[31], Vector2.Distance(points[31], points[32]), YawColor);
-                    GUI.Label(new Rect(arcCenter.x - 35f, arcCenter.y + 50f, 150f, 20f), "Local Y rotation", EditorStyles.whiteMiniLabel);
+                    // Share the velocity origin; positive local yaw turns the nose right.
+                    Arrow(center, Vector2.right * Mathf.Sign(data.LocalYawSpeed), 42f, YawColor);
                 }
             }
         }
@@ -317,6 +398,47 @@ public class VehicleDebugWindow : EditorWindow
             Handles.color = previous;
             Handles.EndGUI();
         }
+    }
+
+    private void DrawTractionCircles(Rect rect)
+    {
+        if (Event.current.type != EventType.Repaint) return;
+        Handles.BeginGUI();
+        Color previous = Handles.color;
+        try
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                WheelDebugData wheel = data.Wheels[i];
+                Rect cell = new Rect(rect.x + (i % 2) * rect.width * 0.5f,
+                    rect.y + (i / 2) * rect.height * 0.5f, rect.width * 0.5f, rect.height * 0.5f);
+                // Reserve separate bands for the title, F label, circle, and B label.
+                Vector2 center = new Vector2(cell.center.x, cell.y + 60f);
+                float limit = Mathf.Min(cell.width * 0.22f, 24f);
+                float available = wheel.HasPhysicsData ? wheel.AvailableGrip : 0f;
+                // Both circles share a scale; zoom out together if grip exceeds the reference.
+                float scale = limit / Mathf.Max(defaultTractionImpulse, available, 0.00001f);
+                Handles.color = Color.gray;
+                Handles.DrawLine(center - Vector2.right * (limit + 8f), center + Vector2.right * (limit + 8f));
+                Handles.DrawLine(center - Vector2.up * (limit + 8f), center + Vector2.up * (limit + 8f));
+                Handles.DrawWireDisc(center, Vector3.forward, defaultTractionImpulse * scale);
+                GUI.Label(new Rect(cell.x + 8f, cell.y + 2f, cell.width - 16f, 13f), WheelNames[i], compactMini);
+                GUI.Label(new Rect(center.x - 4f, center.y - limit - 18f, 16f, 13f), "F");
+                GUI.Label(new Rect(center.x - 4f, center.y + limit + 9f, 16f, 13f), "B");
+                GUI.Label(new Rect(center.x - limit - 20f, center.y - 9f, 20f, 18f), "L");
+                GUI.Label(new Rect(center.x + limit + 9f, center.y - 9f, 20f, 18f), "R");
+                if (!wheel.HasPhysicsData) continue;
+                Color blue = new Color(0.2f, 0.6f, 1f);
+                Handles.color = blue;
+                Handles.DrawWireDisc(center, Vector3.forward, available * scale);
+                Vector2 actual = Vector2.ClampMagnitude(new Vector2(wheel.LateralImpulse * wheel.LateralSign, -wheel.Longitudinal), available);
+                Vector2 desired = new Vector2(wheel.DesiredLateral * wheel.LateralSign, -wheel.DesiredLongitudinal);
+                Arrow(center, desired, Mathf.Min(desired.magnitude * scale, limit + 15f), desired.magnitude > available ? Color.red : blue);
+                Handles.color = blue;
+                Handles.DrawSolidDisc(center + actual * scale, Vector3.forward, 3f);
+            }
+        }
+        finally { Handles.color = previous; Handles.EndGUI(); }
     }
 
     private static Vector2 Project(Vector3 local) => new Vector2(local.x, -local.z);
@@ -336,7 +458,7 @@ public class VehicleDebugWindow : EditorWindow
     {
         public bool HasPhysicsData;
         public Vector3 LocalNorth;
-        public float Speed = 0f, AngularSpeed = 0f, LocalYawSpeed = 0f;
+        public float Speed = 0f, SpeedKmH = 0f, AngularSpeed = 0f, LocalYawSpeed = 0f;
         public Vector3 WorldDirection = Vector3.zero, LocalVelocity = Vector3.zero, WorldRotationAxis = Vector3.zero;
         public readonly WheelDebugData[] Wheels =
         {
@@ -352,6 +474,8 @@ public class VehicleDebugWindow : EditorWindow
         public Vector3 LocalForward = Vector3.forward;
         public float SlipAngle = 0f, LateralImpulse = 0f, TurnAngle = 0f;
         public float AxialVelocity = 0f, Length = 0f, GroundDistance = 0f, DamperForce = 0f, SuspensionForce = 0f;
+        public float DesiredLateral, Longitudinal, DesiredLongitudinal, AvailableGrip, UsedGrip;
+        public float LinearSpeed, GroundSpeed, SlipRatio, Torque, Load, LateralSign;
         public bool Grounded = false;
     }
 }

@@ -1,4 +1,5 @@
 using Box3D.Hybrid;
+using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
@@ -11,10 +12,11 @@ namespace B3DVehicle
         public float m_mass = 25.0f;
         public float m_wheelRadius = 0.5f;
         public float m_gripScale = 1.0f;
+        [Description("Set to -1 to use automatic calculation from mass")]
+        public float m_inertia = -1.0f;
         //因为轮胎非刚体，所以其最大静态摩擦力与压力的关系并非定值系数，而是曲线
         public NormalizedCurveAsset m_slipAngleToGripCurve;
         public float m_staticFrictionCoeff = 0.7f;
-        public float m_laterlCounterScale = 0.9f;
 
         //public float m_dynamicFrictionScale = 0.9f;
 
@@ -48,34 +50,72 @@ namespace B3DVehicle
     public class VehicleInputs
     {
         public float m_steering = 0.0f; // (-1 ~ 1)
-                                        //steering
-                                        //gas
+        public float m_throttle = 0.0f; // (0 ~ 1)
                                         //brake
+    }
+
+    [System.Serializable]
+    // 用于记录计算中间状态
+    public class WheelTransitionalState
+    {
+        public Vector3 m_velocityContact_ws = Vector3.zero;
+        public float m_velocityLateral = 0.0f;
+        public float m_velocityLongitudinal = 0.0f;
+        public float m_angularVelocity = 0.0f; //possitive = spin from back to front through top
+
+        public float m_desiredLateralImpulse = 0.0f;
+        public float m_desiredLongitudinalImpulse = 0.0f;
+        
+        public float m_availableGripImpulse = 0.0f;
+
+        public float m_currentLateralImpulse = 0.0f;
+        public float m_currentLongitudinalImpulse = 0.0f;
+
+        // 目前先粗略平均一下，以近似这一帧的Lateral和Longitudinal Impulse情况
+        public float m_accumDesiredLateralImpulse = 0.0f;
+        public float m_accumDesiredLongitudinalImpulse = 0.0f;
+        public float m_accumAvailableGripImpulse = 0.0f;
+        public float m_accumGeneratedLateralImpulse = 0.0f;
+        public float m_accumGeneratedLongitudinalImpulse = 0.0f;
+        public float m_accumDT = 0.0f;
     }
 
     [System.Serializable]
     public class WheelState
     {
         //TODO: 轮胎超过一定角度后不再提供抓地（抓地力 vs 角度 曲线？）
+        public float m_currentTorque = 0.0f;
+        public float m_currentSteerAngle = 0.0f;
 
         public Vector3 m_currentDirFoward_ls = Vector3.zero;
         public Vector3 m_currentDirFoward_ws = Vector3.zero;
         public Vector3 m_currentDirUp_ws = Vector3.zero;
         //public Vector3 m_currentDirRight_ws = Vector3.zero;
         public Vector3 m_currentDirLateral_ws = Vector3.zero;
+        public Vector3 m_currentDirLongitudinal_ws = Vector3.zero;
 
         //public Vector3 m_currentPos_ls = Vector3.zero;
         public Vector3 m_currentPos_ws = Vector3.zero;
+        public float m_effectiveMassAtContactLateral = 0.0f;
+        public float m_effectiveMassAtContactLongitudinal = 0.0f;
 
         public Vector3 m_currentVelocity_ws = Vector3.zero;
-        public float m_lastVelocityLateral = 0;
         public float m_currentVelocityLateral = 0;
+        public float m_currentVelocityLongitudinal = 0.0f;
         public float m_currentSlipAngle = 0.0f;
+        public float m_currentSlipRatio = 0.0f;
 
         public bool m_isGrounded = false;
         public Vector3 m_currentGroundContact_ws = Vector3.zero;
 
+        public WheelTransitionalState m_transitional;
+
+        public float m_desiredLateralImpulse = 0.0f;
+        public float m_desiredLongitudinalImpulse = 0.0f;
+        public float m_availableGripImpulse = 0.0f;
         public float m_currentLateralImpulse = 0.0f;
+        public float m_currentLongitudinalImpulse = 0.0f;
+        public float m_currentAngularVelocity = 0.0f; //possitive = spin from back to front through top
 
         public override string ToString()
         {

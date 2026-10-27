@@ -237,7 +237,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f9f68110aa149f18c0049fef979bb2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 1000
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -247,6 +246,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 0
+  Density: 1000
+  Mass: 1
   Size: {x: 1, y: 1, z: 1}
 --- !u!114 &54409930
 MonoBehaviour:
@@ -265,6 +267,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!23 &54409931
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -383,6 +387,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!114 &57594376
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -395,7 +401,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f9f68110aa149f18c0049fef979bb2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 1000
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -405,6 +410,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 0
+  Density: 1000
+  Mass: 1
   Size: {x: 1, y: 1, z: 1}
 --- !u!23 &57594377
 MeshRenderer:
@@ -883,7 +891,7 @@ GameObject:
   - component: {fileID: 187578693}
   - component: {fileID: 187578692}
   m_Layer: 6
-  m_Name: Wheel_RF
+  m_Name: Wheel_FR
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -899,7 +907,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0.475, y: -0.3, z: 0.35}
-  m_LocalScale: {x: 0.5, y: 1, z: 0.2}
+  m_LocalScale: {x: 0.4, y: 1, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1146674487}
@@ -920,25 +928,52 @@ MonoBehaviour:
   m_wheelProperties:
     m_mass: 25
     m_wheelRadius: 0.5
-    m_gripScale: 0.1
+    m_gripScale: 1
+    m_inertia: -1
     m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
     m_staticFrictionCoeff: 1.5
-    m_laterlCounterScale: 1
     m_allowedAngle: 40
   m_wheelState:
+    m_currentTorque: 0
+    m_currentSteerAngle: 0
     m_currentDirFoward_ls: {x: 0, y: 0, z: 0}
     m_currentDirFoward_ws: {x: 0, y: 0, z: 0}
     m_currentDirUp_ws: {x: 0, y: 0, z: 0}
     m_currentDirLateral_ws: {x: 0, y: 0, z: 0}
+    m_currentDirLongitudinal_ws: {x: 0, y: 0, z: 0}
     m_currentPos_ws: {x: 0, y: 0, z: 0}
+    m_effectiveMassAtContactLateral: 0
+    m_effectiveMassAtContactLongitudinal: 0
     m_currentVelocity_ws: {x: 0, y: 0, z: 0}
-    m_lastVelocityLateral: 0
     m_currentVelocityLateral: 0
+    m_currentVelocityLongitudinal: 0
     m_currentSlipAngle: 0
+    m_currentSlipRatio: 0
     m_isGrounded: 0
     m_currentGroundContact_ws: {x: 0, y: 0, z: 0}
+    m_transitional:
+      m_velocityContact_ws: {x: 0, y: 0, z: 0}
+      m_velocityLateral: 0
+      m_velocityLongitudinal: 0
+      m_angularVelocity: 0
+      m_desiredLateralImpulse: 0
+      m_desiredLongitudinalImpulse: 0
+      m_availableGripImpulse: 0
+      m_currentLateralImpulse: 0
+      m_currentLongitudinalImpulse: 0
+      m_accumDesiredLateralImpulse: 0
+      m_accumDesiredLongitudinalImpulse: 0
+      m_accumAvailableGripImpulse: 0
+      m_accumGeneratedLateralImpulse: 0
+      m_accumGeneratedLongitudinalImpulse: 0
+      m_accumDT: 0
+    m_desiredLateralImpulse: 0
+    m_desiredLongitudinalImpulse: 0
+    m_availableGripImpulse: 0
     m_currentLateralImpulse: 0
+    m_currentLongitudinalImpulse: 0
+    m_currentAngularVelocity: 0
 --- !u!114 &187578693
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -954,9 +989,9 @@ MonoBehaviour:
   m_suspensionProperties:
     m_posConnection_vehicle_ls: {x: 0, y: 0, z: 0}
     m_suspensionDirection_vehicle_ls: {x: 0, y: 1, z: 0}
-    m_suspensionHardness: 20000
-    m_suspensionDamper: 500
-    m_suspensionLength: 0.5
+    m_suspensionHardness: 50000
+    m_suspensionDamper: 5000
+    m_suspensionLength: 0.2
   m_suspensionState:
     m_currentSuspensionVelocity: 0
     m_currentSuspensionCompression: 0
@@ -1357,6 +1392,7 @@ GameObject:
   - component: {fileID: 295247344}
   - component: {fileID: 295247343}
   - component: {fileID: 295247342}
+  - component: {fileID: 295247347}
   m_Layer: 6
   m_Name: Body
   m_TagString: Untagged
@@ -1374,7 +1410,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 2, y: 1, z: 5}
+  m_LocalScale: {x: 2.5, y: 1, z: 5}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 321573843}
@@ -1401,6 +1437,15 @@ MonoBehaviour:
   m_vehicleState:
     m_b3dBody: {fileID: 0}
     m_antiRollTorque: 0
+  m_vehicleContext:
+    m_surfaceFrictionCoeff: 1
+    m_inputs:
+      m_steering: 0
+      m_throttle: 0
+  m_gasInputCurve: {fileID: 0}
+  m_maxSteerAngle: 30
+  m_steeringInputCurve: {fileID: 0}
+  m_testEngineTorque: 300
   m_debugDrawScale: 0.1
 --- !u!114 &295247343
 MonoBehaviour:
@@ -1414,7 +1459,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f9f68110aa149f18c0049fef979bb2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 100
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -1424,6 +1468,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 1
+  Density: 100
+  Mass: 1000
   Size: {x: 1, y: 1, z: 1}
 --- !u!114 &295247344
 MonoBehaviour:
@@ -1442,6 +1489,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!23 &295247345
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -1492,6 +1541,25 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 295247340}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &295247347
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 295247340}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0278e2ea82489547b960d98cde5f930, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  camera: {fileID: 330585545}
+  target: {fileID: 295247341}
+  offset: {x: 0, y: 2, z: -14}
+  cameraXRotation: -5
+  moveScale: 1
+  durationExitMoveMode: 5
+  rotationClampX: 60
 --- !u!1 &313536706
 GameObject:
   m_ObjectHideFlags: 0
@@ -1587,7 +1655,7 @@ GameObject:
   - component: {fileID: 321573845}
   - component: {fileID: 321573844}
   m_Layer: 6
-  m_Name: Wheel_LF
+  m_Name: Wheel_FL
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1603,7 +1671,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -0.475, y: -0.3, z: 0.35}
-  m_LocalScale: {x: 0.5, y: 1, z: 0.2}
+  m_LocalScale: {x: 0.4, y: 1, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1335264925}
@@ -1624,25 +1692,52 @@ MonoBehaviour:
   m_wheelProperties:
     m_mass: 25
     m_wheelRadius: 0.5
-    m_gripScale: 0.1
+    m_gripScale: 1
+    m_inertia: -1
     m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
     m_staticFrictionCoeff: 1.5
-    m_laterlCounterScale: 1
     m_allowedAngle: 40
   m_wheelState:
+    m_currentTorque: 0
+    m_currentSteerAngle: 0
     m_currentDirFoward_ls: {x: 0, y: 0, z: 0}
     m_currentDirFoward_ws: {x: 0, y: 0, z: 0}
     m_currentDirUp_ws: {x: 0, y: 0, z: 0}
     m_currentDirLateral_ws: {x: 0, y: 0, z: 0}
+    m_currentDirLongitudinal_ws: {x: 0, y: 0, z: 0}
     m_currentPos_ws: {x: 0, y: 0, z: 0}
+    m_effectiveMassAtContactLateral: 0
+    m_effectiveMassAtContactLongitudinal: 0
     m_currentVelocity_ws: {x: 0, y: 0, z: 0}
-    m_lastVelocityLateral: 0
     m_currentVelocityLateral: 0
+    m_currentVelocityLongitudinal: 0
     m_currentSlipAngle: 0
+    m_currentSlipRatio: 0
     m_isGrounded: 0
     m_currentGroundContact_ws: {x: 0, y: 0, z: 0}
+    m_transitional:
+      m_velocityContact_ws: {x: 0, y: 0, z: 0}
+      m_velocityLateral: 0
+      m_velocityLongitudinal: 0
+      m_angularVelocity: 0
+      m_desiredLateralImpulse: 0
+      m_desiredLongitudinalImpulse: 0
+      m_availableGripImpulse: 0
+      m_currentLateralImpulse: 0
+      m_currentLongitudinalImpulse: 0
+      m_accumDesiredLateralImpulse: 0
+      m_accumDesiredLongitudinalImpulse: 0
+      m_accumAvailableGripImpulse: 0
+      m_accumGeneratedLateralImpulse: 0
+      m_accumGeneratedLongitudinalImpulse: 0
+      m_accumDT: 0
+    m_desiredLateralImpulse: 0
+    m_desiredLongitudinalImpulse: 0
+    m_availableGripImpulse: 0
     m_currentLateralImpulse: 0
+    m_currentLongitudinalImpulse: 0
+    m_currentAngularVelocity: 0
 --- !u!114 &321573845
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1658,9 +1753,9 @@ MonoBehaviour:
   m_suspensionProperties:
     m_posConnection_vehicle_ls: {x: 0, y: 0, z: 0}
     m_suspensionDirection_vehicle_ls: {x: 0, y: 1, z: 0}
-    m_suspensionHardness: 20000
-    m_suspensionDamper: 500
-    m_suspensionLength: 0.5
+    m_suspensionHardness: 50000
+    m_suspensionDamper: 5000
+    m_suspensionLength: 0.2
   m_suspensionState:
     m_currentSuspensionVelocity: 0
     m_currentSuspensionCompression: 0
@@ -1864,6 +1959,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!114 &400989432
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1876,7 +1973,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f9f68110aa149f18c0049fef979bb2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 1000
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -1886,6 +1982,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 0
+  Density: 1000
+  Mass: 1
   Size: {x: 1, y: 1, z: 1}
 --- !u!23 &400989433
 MeshRenderer:
@@ -2234,6 +2333,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!114 &425700172
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2246,7 +2347,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f9f68110aa149f18c0049fef979bb2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 1000
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -2256,6 +2356,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 0
+  Density: 1000
+  Mass: 1
   Size: {x: 1, y: 1, z: 1}
 --- !u!23 &425700173
 MeshRenderer:
@@ -2698,7 +2801,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f9f68110aa149f18c0049fef979bb2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 1000
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -2708,6 +2810,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 0
+  Density: 1000
+  Mass: 1
   Size: {x: 1, y: 1, z: 1}
 --- !u!114 &513216189
 MonoBehaviour:
@@ -2726,6 +2831,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!23 &513216190
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2823,7 +2930,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7df064980d9c49d58d4d42ddda989f33, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 1000
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -2833,6 +2939,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 0
+  Density: 1000
+  Mass: 1
   Radius: 0.5
 --- !u!114 &533445902
 MonoBehaviour:
@@ -2851,6 +2960,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!23 &533445903
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -3827,7 +3938,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1131723122
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3865,7 +3976,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 36f11ee78c494e0cbe5deacd313d2663, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 10
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -3875,6 +3985,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 1
+  Density: 1000
+  Mass: 200
   Radius: 0.5
   Height: 2
   Direction: 1
@@ -3895,6 +4008,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!23 &1131723125
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -4766,7 +4881,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0.475, y: -0.3, z: -0.35}
-  m_LocalScale: {x: 0.5, y: 1, z: 0.2}
+  m_LocalScale: {x: 0.4, y: 1, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1608045358}
@@ -4787,25 +4902,52 @@ MonoBehaviour:
   m_wheelProperties:
     m_mass: 25
     m_wheelRadius: 0.5
-    m_gripScale: 0.1
+    m_gripScale: 1
+    m_inertia: -1
     m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
     m_staticFrictionCoeff: 1.5
-    m_laterlCounterScale: 1
     m_allowedAngle: 40
   m_wheelState:
+    m_currentTorque: 0
+    m_currentSteerAngle: 0
     m_currentDirFoward_ls: {x: 0, y: 0, z: 0}
     m_currentDirFoward_ws: {x: 0, y: 0, z: 0}
     m_currentDirUp_ws: {x: 0, y: 0, z: 0}
     m_currentDirLateral_ws: {x: 0, y: 0, z: 0}
+    m_currentDirLongitudinal_ws: {x: 0, y: 0, z: 0}
     m_currentPos_ws: {x: 0, y: 0, z: 0}
+    m_effectiveMassAtContactLateral: 0
+    m_effectiveMassAtContactLongitudinal: 0
     m_currentVelocity_ws: {x: 0, y: 0, z: 0}
-    m_lastVelocityLateral: 0
     m_currentVelocityLateral: 0
+    m_currentVelocityLongitudinal: 0
     m_currentSlipAngle: 0
+    m_currentSlipRatio: 0
     m_isGrounded: 0
     m_currentGroundContact_ws: {x: 0, y: 0, z: 0}
+    m_transitional:
+      m_velocityContact_ws: {x: 0, y: 0, z: 0}
+      m_velocityLateral: 0
+      m_velocityLongitudinal: 0
+      m_angularVelocity: 0
+      m_desiredLateralImpulse: 0
+      m_desiredLongitudinalImpulse: 0
+      m_availableGripImpulse: 0
+      m_currentLateralImpulse: 0
+      m_currentLongitudinalImpulse: 0
+      m_accumDesiredLateralImpulse: 0
+      m_accumDesiredLongitudinalImpulse: 0
+      m_accumAvailableGripImpulse: 0
+      m_accumGeneratedLateralImpulse: 0
+      m_accumGeneratedLongitudinalImpulse: 0
+      m_accumDT: 0
+    m_desiredLateralImpulse: 0
+    m_desiredLongitudinalImpulse: 0
+    m_availableGripImpulse: 0
     m_currentLateralImpulse: 0
+    m_currentLongitudinalImpulse: 0
+    m_currentAngularVelocity: 0
 --- !u!114 &1334842685
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4821,9 +4963,9 @@ MonoBehaviour:
   m_suspensionProperties:
     m_posConnection_vehicle_ls: {x: 0, y: 0, z: 0}
     m_suspensionDirection_vehicle_ls: {x: 0, y: 1, z: 0}
-    m_suspensionHardness: 20000
-    m_suspensionDamper: 500
-    m_suspensionLength: 0.5
+    m_suspensionHardness: 50000
+    m_suspensionDamper: 5000
+    m_suspensionLength: 0.2
   m_suspensionState:
     m_currentSuspensionVelocity: 0
     m_currentSuspensionCompression: 0
@@ -5304,7 +5446,7 @@ GameObject:
   - component: {fileID: 1568680979}
   - component: {fileID: 1568680978}
   m_Layer: 6
-  m_Name: Wheel_LR
+  m_Name: Wheel_RL
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5320,7 +5462,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -0.475, y: -0.3, z: -0.35}
-  m_LocalScale: {x: 0.5, y: 1, z: 0.2}
+  m_LocalScale: {x: 0.4, y: 1, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 472586986}
@@ -5341,25 +5483,52 @@ MonoBehaviour:
   m_wheelProperties:
     m_mass: 25
     m_wheelRadius: 0.5
-    m_gripScale: 0.1
+    m_gripScale: 1
+    m_inertia: -1
     m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
     m_staticFrictionCoeff: 1.5
-    m_laterlCounterScale: 1
     m_allowedAngle: 40
   m_wheelState:
+    m_currentTorque: 0
+    m_currentSteerAngle: 0
     m_currentDirFoward_ls: {x: 0, y: 0, z: 0}
     m_currentDirFoward_ws: {x: 0, y: 0, z: 0}
     m_currentDirUp_ws: {x: 0, y: 0, z: 0}
     m_currentDirLateral_ws: {x: 0, y: 0, z: 0}
+    m_currentDirLongitudinal_ws: {x: 0, y: 0, z: 0}
     m_currentPos_ws: {x: 0, y: 0, z: 0}
+    m_effectiveMassAtContactLateral: 0
+    m_effectiveMassAtContactLongitudinal: 0
     m_currentVelocity_ws: {x: 0, y: 0, z: 0}
-    m_lastVelocityLateral: 0
     m_currentVelocityLateral: 0
+    m_currentVelocityLongitudinal: 0
     m_currentSlipAngle: 0
+    m_currentSlipRatio: 0
     m_isGrounded: 0
     m_currentGroundContact_ws: {x: 0, y: 0, z: 0}
+    m_transitional:
+      m_velocityContact_ws: {x: 0, y: 0, z: 0}
+      m_velocityLateral: 0
+      m_velocityLongitudinal: 0
+      m_angularVelocity: 0
+      m_desiredLateralImpulse: 0
+      m_desiredLongitudinalImpulse: 0
+      m_availableGripImpulse: 0
+      m_currentLateralImpulse: 0
+      m_currentLongitudinalImpulse: 0
+      m_accumDesiredLateralImpulse: 0
+      m_accumDesiredLongitudinalImpulse: 0
+      m_accumAvailableGripImpulse: 0
+      m_accumGeneratedLateralImpulse: 0
+      m_accumGeneratedLongitudinalImpulse: 0
+      m_accumDT: 0
+    m_desiredLateralImpulse: 0
+    m_desiredLongitudinalImpulse: 0
+    m_availableGripImpulse: 0
     m_currentLateralImpulse: 0
+    m_currentLongitudinalImpulse: 0
+    m_currentAngularVelocity: 0
 --- !u!114 &1568680979
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5375,9 +5544,9 @@ MonoBehaviour:
   m_suspensionProperties:
     m_posConnection_vehicle_ls: {x: 0, y: 0, z: 0}
     m_suspensionDirection_vehicle_ls: {x: 0, y: 1, z: 0}
-    m_suspensionHardness: 20000
-    m_suspensionDamper: 500
-    m_suspensionLength: 0.5
+    m_suspensionHardness: 50000
+    m_suspensionDamper: 5000
+    m_suspensionLength: 0.2
   m_suspensionState:
     m_currentSuspensionVelocity: 0
     m_currentSuspensionCompression: 0
@@ -5527,6 +5696,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!114 &1625013390
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5539,7 +5710,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f9f68110aa149f18c0049fef979bb2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 1000
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -5549,6 +5719,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 0
+  Density: 1000
+  Mass: 1
   Size: {x: 1, y: 1, z: 1}
 --- !u!23 &1625013391
 MeshRenderer:
@@ -6691,6 +6864,8 @@ MonoBehaviour:
   AngularDamping: 0.05
   StartAwake: 1
   _allowFastRotation: 0
+  OverrideMass: 0
+  MassOverride: 1
 --- !u!114 &2029800182
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6703,7 +6878,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f9f68110aa149f18c0049fef979bb2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Density: 1000
   Friction: 0.6
   Restitution: 0
   Center: {x: 0, y: 0, z: 0}
@@ -6713,6 +6887,9 @@ MonoBehaviour:
   CollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  MassMode: 0
+  Density: 1000
+  Mass: 1
   Size: {x: 1, y: 1, z: 1}
 --- !u!23 &2029800183
 MeshRenderer:
