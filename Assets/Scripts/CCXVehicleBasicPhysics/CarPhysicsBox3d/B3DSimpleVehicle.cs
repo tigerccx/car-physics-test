@@ -76,9 +76,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
                 Debug.LogError("Missing a Wheel for Suspension!");
             }
             m_wheels.Add(wheel);
-
-            VehiclePhysics.InitSuspensionState(suspension.m_suspensionProperties, ref suspension.m_suspensionState);
-}
+        }
 
         Box3DDispatcher.Register(m_b3dBody.Body, OnPreIntegratePositions);
 
@@ -103,7 +101,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
             }
         }
 
-        InitVehicleStates();
+        InitVehiclePhysics();
     }
 
     private void Update()
@@ -206,51 +204,26 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         m_wheelFR.m_wheelState.m_currentSteerAngle = steerAngle;
     }
 
-    //void FixedUpdate()
-    //{
-    //    CalculateInputState();
-    //    ApplySteering(steeringInput);
-    //    ApplyDrive();
-
-    //    for (int i = 0; i < m_suspensions.Count; ++i)
-    //    {
-    //        Suspension suspension = m_suspensions[i];
-    //        Wheel wheel = m_wheels[i];
-
-    //        //Suspension
-    //        VehiclePhysics.UpdateSuspensionAndApplyToVehicle(
-    //            Time.fixedDeltaTime,
-    //            suspension.m_suspensionProperties,
-    //            wheel.m_wheelProperties,
-    //            ref suspension.m_suspensionState,
-    //            ref m_vehicleState);
-    //    }
-
-    //    //Wheel
-    //    for (int i = 0; i < m_suspensions.Count; ++i)
-    //    {
-    //        Suspension suspension = m_suspensions[i];
-    //        Wheel wheel = m_wheels[i];
-
-    //        VehiclePhysics.UpdateWheelAndApplyToVehicle_Main(
-    //            Time.fixedDeltaTime,
-    //            m_vehicleContext,
-    //            suspension.m_suspensionProperties,
-    //            wheel.m_wheelProperties,
-    //            in suspension.m_suspensionState,
-    //            ref wheel.m_wheelState,
-    //            ref m_vehicleState);
-    //    }
-    //}
-
-    //测试调整顺序
-    void FixedUpdate()
+    private void UpdateVehiclePhysics_SuspensionStates()
     {
-        CalculateInputState();
-        ApplySteering(steeringInput);
-        ApplyDrive();
+        //Suspension
+        for (int i = 0; i < m_suspensions.Count; ++i)
+        {
+            Suspension suspension = m_suspensions[i];
+            Wheel wheel = m_wheels[i];
 
-        // 有了新的输入，需要再更新一次
+            VehiclePhysics.UpdateSuspensionStateAndForce(
+                Time.fixedDeltaTime,
+                suspension.m_suspensionProperties,
+                wheel.m_wheelProperties,
+                m_vehicleState,
+                ref suspension.m_suspensionState);
+        }
+    }
+
+    private void UpdateVehiclePhysics_WheelStates()
+    {
+        //Wheel
         for (int i = 0; i < m_suspensions.Count; ++i)
         {
             Suspension suspension = m_suspensions[i];
@@ -264,7 +237,10 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
                 suspension.m_suspensionState,
                 ref wheel.m_wheelState);
         }
+    }
 
+    private void UpdateVehiclePhysics_ApplySuspensionForce()
+    {
         for (int i = 0; i < m_suspensions.Count; ++i)
         {
             Suspension suspension = m_suspensions[i];
@@ -274,32 +250,62 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         }
     }
 
-    public void Box3DPrePhysics()
+    private void UpdateVehiclePhysics_FixedUpdate()
     {
+        // Update wheel state with new inputs
+        UpdateVehiclePhysics_WheelStates();
+
+        // Apply suspension force
+        UpdateVehiclePhysics_ApplySuspensionForce();
+    }
+
+    public void InitVehiclePhysics()
+    {
+        foreach (Suspension suspension in m_suspensions)
+        {
+            VehiclePhysics.InitSuspensionState(suspension.m_suspensionProperties, ref suspension.m_suspensionState);
+        }
+
+        UpdateVehiclePhysics_SuspensionStates();
+        UpdateVehiclePhysics_WheelStates();
+
+        for (int i = 0; i < m_suspensions.Count; ++i)
+        {
+            Suspension suspension = m_suspensions[i];
+            suspension.m_suspensionState.m_currentSuspensionVelocity = 0.0f;
+        }
+
+        UpdateVehiclePhysics_SuspensionStates();
+    }
+
+    private void UpdateVehiclePhysics_PrePhysics()
+    {
+        // Initialize wheel state for transitional state calculations and substeps
         for (int i = 0; i < m_suspensions.Count; ++i)
         {
             Suspension suspension = m_suspensions[i];
             Wheel wheel = m_wheels[i];
 
-            VehiclePhysics.UpdateWheelAndApplyToVehicle_PrePhysics(
-                Time.fixedDeltaTime,
-                m_vehicleContext,
-                suspension.m_suspensionProperties,
-                wheel.m_wheelProperties,
-                in suspension.m_suspensionState,
-                ref wheel.m_wheelState,
-                ref m_vehicleState);
+            VehiclePhysics.PrepareWheelSubsteps(
+                    Time.fixedDeltaTime,
+                    m_vehicleContext,
+                    suspension.m_suspensionProperties,
+                    wheel.m_wheelProperties,
+                    in suspension.m_suspensionState,
+                    ref wheel.m_wheelState,
+                    ref m_vehicleState);
         }
     }
 
-    private void OnPreIntegratePositions(in Body body,
-        in Vector3 deltaPosition, in Quaternion deltaRotation, float subStepDeltaTime)
+    private void UpdateVehiclePhysics_Substep_PrePosIntegration(
+        Vector3 deltaPosition, 
+        Quaternion deltaRotation, 
+        float subStepDeltaTime)
     {
-        m_vehicleContext.m_surfaceFrictionCoeff = 1.0f;
-        m_vehicleContext.m_inputs.m_steering = 0.0f;
-
-        //Wheel
-        int countIterWheel = 4;
+        // This is already a substep on Box3D level (if configured)
+        // But more substeps for wheel simulation itself
+        
+        int countIterWheel = 4; //More wheel substep
         float dividedSubStepDeltaTime = subStepDeltaTime / countIterWheel;
         for (int iterWheel = 0; iterWheel < countIterWheel; ++iterWheel)
         {
@@ -310,7 +316,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
                 Suspension suspension = m_suspensions[i];
                 Wheel wheel = m_wheels[i];
 
-                VehiclePhysics.UpdateWheelAndApplyToVehicle_SubStep_PrePosIntegration(
+                VehiclePhysics.UpdateWheelSubstep(
                     in deltaPosition, in deltaRotation, dividedSubStepDeltaTime,
                     m_vehicleContext,
                     suspension.m_suspensionProperties,
@@ -322,14 +328,14 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         }
     }
 
-    public void Box3DPostPhysics()
+    private void UpdateVehiclePhysics_PostPhysics()
     {
         for (int i = 0; i < m_suspensions.Count; ++i)
         {
             Suspension suspension = m_suspensions[i];
             Wheel wheel = m_wheels[i];
 
-            VehiclePhysics.UpdateWheelAndApplyToVehicle_PostPhysics(
+            VehiclePhysics.FinishWheelSubsteps(
                 Time.fixedDeltaTime,
                 m_vehicleContext,
                 suspension.m_suspensionProperties,
@@ -339,69 +345,35 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
                 ref m_vehicleState);
         }
 
-        UpdateStatesPostPhysics();
+        UpdateVehiclePhysics_SuspensionStates();
+        UpdateVehiclePhysics_WheelStates();
     }
 
-    public void InitVehicleStates()
+    void FixedUpdate()
     {
-        UpdateStatesPostPhysics();
+        CalculateInputState();
+        ApplySteering(steeringInput);
+        ApplyDrive();
 
-        for (int i = 0; i < m_suspensions.Count; ++i)
-        {
-            Suspension suspension = m_suspensions[i];
-            suspension.m_suspensionState.m_currentSuspensionVelocity = 0.0f;
-        }
+        m_vehicleContext.m_surfaceFrictionCoeff = 1.0f;
 
-        UpdateSuspensionStates();
+        UpdateVehiclePhysics_FixedUpdate();
     }
 
-    public void UpdateSuspensionStates()
+    public void Box3DPrePhysics()
     {
-        //Suspension
-        for (int i = 0; i < m_suspensions.Count; ++i)
-        {
-            Suspension suspension = m_suspensions[i];
-            Wheel wheel = m_wheels[i];
-
-            //Suspension
-            VehiclePhysics.UpdateSuspensionState(
-                Time.fixedDeltaTime,
-                suspension.m_suspensionProperties,
-                wheel.m_wheelProperties,
-                m_vehicleState,
-                ref suspension.m_suspensionState);
-
-            VehiclePhysics.CalculateSuspensionForce(
-                suspension.m_suspensionProperties,
-                ref suspension.m_suspensionState);
-
-            // Eps以下记为已经settle
-            VehiclePhysics.CutOffSuspensionEndStatesIfSettled(ref suspension.m_suspensionState);
-        }
+        UpdateVehiclePhysics_PrePhysics();
     }
 
-    public void UpdateWheelStates()
+    private void OnPreIntegratePositions(in Body body,
+        in Vector3 deltaPosition, in Quaternion deltaRotation, float subStepDeltaTime)
     {
-        //Wheel
-        for (int i = 0; i < m_suspensions.Count; ++i)
-        {
-            Suspension suspension = m_suspensions[i];
-            Wheel wheel = m_wheels[i];
-
-            VehiclePhysics.UpdateWheelState(
-                m_vehicleContext,
-                wheel.m_wheelProperties,
-                suspension.m_suspensionProperties,
-                m_vehicleState,
-                suspension.m_suspensionState,
-                ref wheel.m_wheelState);
-        }
+        UpdateVehiclePhysics_Substep_PrePosIntegration(deltaPosition, deltaRotation, subStepDeltaTime);
     }
 
-    public void UpdateStatesPostPhysics()
+    public void Box3DPostPhysics()
     {
-        UpdateSuspensionStates();
-        UpdateWheelStates();
+        UpdateVehiclePhysics_PostPhysics();
     }
 
     #region Debug

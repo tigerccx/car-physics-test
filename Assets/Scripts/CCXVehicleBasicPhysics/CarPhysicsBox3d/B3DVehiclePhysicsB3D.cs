@@ -16,7 +16,63 @@ namespace B3DVehicle
     {
         static float EPS = 1e-6f;
 
+        #region Utility
+        private static float ComputeEffectiveMass(
+            Box3DBody vehicleB3dBody,
+            Vector3 posRelativeToCentreOfMass_ws,
+            Vector3 intendedImpulseDirection_ws)
+        {
+            float invMass = 1.0f / vehicleB3dBody.mass;
+
+            Matrix4x4 invInertiaWorld = vehicleB3dBody.GetWorldInverseRotationalInertia();
+
+            Vector3 rCrossDir = Vector3.Cross(posRelativeToCentreOfMass_ws, intendedImpulseDirection_ws);
+            Vector3 angularResponse = invInertiaWorld.MultiplyVector(rCrossDir);
+            Vector3 pointVelocityResponse = Vector3.Cross(angularResponse, posRelativeToCentreOfMass_ws);
+
+            float angularFactor = Vector3.Dot(pointVelocityResponse, intendedImpulseDirection_ws);
+
+            float inverseEffectiveMass = invMass + angularFactor;
+
+            if (inverseEffectiveMass <= EPS)
+                return vehicleB3dBody.mass;
+
+            return 1.0f / inverseEffectiveMass;
+        }
+
+        private static Vector3 GetVelocityAtPoint(
+            in Vector3 velocity,
+            in Vector3 angularVelocity,
+            in Vector3 center_ws,
+            in Vector3 point_ws)
+        {
+            Vector3 offset_ws = point_ws - center_ws;
+            Vector3 velocityAtPoint = velocity + Vector3.Cross(angularVelocity, offset_ws);
+
+            return velocityAtPoint;
+        }
+        #endregion
+
         #region Suspension
+        private static bool CutOffSuspensionEndStatesIfSettled(
+            ref SuspensionState suspensionState)
+        {
+            if (!suspensionState.m_isGrounded ||
+                (
+                    Mathf.Abs(suspensionState.m_currentSuspensionForce) < EPS &&
+                    Mathf.Abs(suspensionState.m_currentSuspensionVelocity) < EPS &&
+                    Mathf.Abs(suspensionState.m_currentSuspensionCompression) < EPS)
+                )
+            {
+                suspensionState.m_currentSuspensionForce = 0.0f;
+                suspensionState.m_currentSuspensionDamperForce = 0.0f;
+                suspensionState.m_currentSuspensionVelocity = 0.0f;
+                suspensionState.m_currentSuspensionCompression = 0.0f;
+                return true;
+            }
+            return false;
+        }
+
         private static void CalculateDamperForce(
             in SuspensionProperties suspensionProperties,
             ref SuspensionState suspensionState)
@@ -30,6 +86,8 @@ namespace B3DVehicle
         {
             CalculateDamperForce(suspensionProperties, ref suspensionState);
             suspensionState.m_currentSuspensionForce = -suspensionProperties.m_suspensionHardness * suspensionState.m_currentSuspensionCompression + suspensionState.m_currentSuspensionDamperForce;
+
+            CutOffSuspensionEndStatesIfSettled(ref suspensionState);
         }
 
         private static bool RaycastAgainstGround(
@@ -103,23 +161,16 @@ namespace B3DVehicle
             suspensionState.m_currentWheelAttachPoint_ws = suspensionState.m_currentVehicleAttachPoint_ws - suspensionState.m_currentDir_ws * suspensionState.m_currentSuspensionLength;
         }
 
-        public static bool CutOffSuspensionEndStatesIfSettled(
+        public static void UpdateSuspensionStateAndForce(
+            float fixedDeltaTime,
+            in SuspensionProperties suspensionProperties,
+            in WheelProperties wheelProperties,
+            in VehicleState vehicleState,
             ref SuspensionState suspensionState)
         {
-            if (!suspensionState.m_isGrounded ||
-                (
-                    Mathf.Abs(suspensionState.m_currentSuspensionForce) < EPS &&
-                    Mathf.Abs(suspensionState.m_currentSuspensionVelocity) < EPS &&
-                    Mathf.Abs(suspensionState.m_currentSuspensionCompression) < EPS)
-                )
-            {
-                suspensionState.m_currentSuspensionForce = 0.0f;
-                suspensionState.m_currentSuspensionDamperForce = 0.0f;
-                suspensionState.m_currentSuspensionVelocity = 0.0f;
-                suspensionState.m_currentSuspensionCompression = 0.0f;
-                return true;
-            }
-            return false;
+            UpdateSuspensionState(fixedDeltaTime, suspensionProperties, wheelProperties, vehicleState, ref suspensionState);
+
+            CalculateSuspensionForce(suspensionProperties, ref suspensionState);
         }
 
         public static void UpdateVehicleStateFromSuspension(
@@ -129,65 +180,9 @@ namespace B3DVehicle
             Vector3 force = suspensionState.m_currentDir_ws * suspensionState.m_currentSuspensionForce;
             vehicleState.m_b3dBody.ApplyForce(force, suspensionState.m_currentVehicleAttachPoint_ws, true);
         }
-
-        public static void UpdateSuspensionAndApplyToVehicle(
-            float fixedDeltaTime,
-            in SuspensionProperties suspensionProperties,
-            in WheelProperties wheelProperties,
-            ref SuspensionState suspensionState,
-            ref VehicleState vehicleState)
-        {
-            UpdateSuspensionState(fixedDeltaTime, suspensionProperties, wheelProperties, vehicleState, ref suspensionState);
-
-            CalculateSuspensionForce(suspensionProperties, ref suspensionState);
-
-            // Eps以下记为已经settle
-            if (CutOffSuspensionEndStatesIfSettled(ref suspensionState))
-            {
-                return;
-            }
-
-            UpdateVehicleStateFromSuspension(suspensionState, ref vehicleState);
-        }
         #endregion
 
         #region Wheel
-
-        private static float ComputeEffectiveMass(
-            Box3DBody vehicleB3dBody,
-            Vector3 wheelPosRelativeToCentreOfMass_ws,
-            Vector3 intendedImpulseDirection_ws)
-        {
-            float invMass = 1.0f / vehicleB3dBody.mass;
-
-            Matrix4x4 invInertiaWorld = vehicleB3dBody.GetWorldInverseRotationalInertia();
-
-            Vector3 rCrossDir = Vector3.Cross(wheelPosRelativeToCentreOfMass_ws, intendedImpulseDirection_ws);
-            Vector3 angularResponse = invInertiaWorld.MultiplyVector(rCrossDir);
-            Vector3 pointVelocityResponse = Vector3.Cross(angularResponse, wheelPosRelativeToCentreOfMass_ws);
-
-            float angularFactor = Vector3.Dot(pointVelocityResponse, intendedImpulseDirection_ws);
-
-            float inverseEffectiveMass = invMass + angularFactor;
-
-            if (inverseEffectiveMass <= EPS)
-                return vehicleB3dBody.mass;
-
-            return 1.0f / inverseEffectiveMass;
-        }
-
-        private static Vector3 GetVelocityAtPoint(
-            in Vector3 velocity,
-            in Vector3 angularVelocity,
-            in Vector3 center_ws,
-            in Vector3 point_ws)
-        {
-            Vector3 offset_ws = point_ws - center_ws;
-            Vector3 velocityAtPoint = velocity + Vector3.Cross(angularVelocity, offset_ws);
-
-            return velocityAtPoint;
-        }
-
         private static float CalculateSlipRatio(float wheelV, float groundV)
         {
             float slipRatio = (wheelV - groundV) / (Mathf.Sign(groundV) * Mathf.Max(Mathf.Abs(groundV), EPS));
@@ -197,7 +192,7 @@ namespace B3DVehicle
             return slipRatio;
         }
 
-        public static void InitWheelTransitionalStates(ref WheelState wheelState)
+        private static void InitWheelTransitionalStates(ref WheelState wheelState)
         {
             wheelState.m_transitional.m_velocityContact_ws = Vector3.zero;
             wheelState.m_transitional.m_velocityLateral = 0.0f;
@@ -218,7 +213,7 @@ namespace B3DVehicle
             wheelState.m_transitional.m_accumDT = 0.0f;
         }
 
-        public static void CalculateWheelTransitionalVelocityStates(
+        private static void CalculateWheelTransitionalVelocityStates(
             in VehicleState vehicleState,
             ref WheelState wheelState)
         {
@@ -236,7 +231,7 @@ namespace B3DVehicle
             wheelState.m_transitional.m_velocityLongitudinal = velocityLongitudinal;
         }
 
-        public static void CalculateWheelDesiredLateralForce(
+        private static void CalculateWheelDesiredLateralForce(
             float subStepDeltaTime,
             in VehicleContext context,
             in WheelProperties wheelProperties,
@@ -253,7 +248,7 @@ namespace B3DVehicle
             wheelState.m_transitional.m_desiredLateralImpulse = desiredLateralImpulse;
         }
 
-        public static void CalculateWheelDesiredLongitudinalForce(
+        private static void CalculateWheelDesiredLongitudinalForce(
             float subStepDeltaTime, 
             in VehicleContext context,
             in WheelProperties wheelProperties,
@@ -284,7 +279,7 @@ namespace B3DVehicle
             //Debug.Log($"slipRatio{slipRatio}(whl{wheelLinearVelocity} vs grnd{contactPointVelocity}), slipVelocity{forwardSlipVelocity}, impulseCntSlip{impulseRequiredToCounterSlip}, impulseDrive{impulseDrive}");
         }
 
-        public static void CalculateWheelLateralAndLongitudinalForce(
+        private static void CalculateWheelLateralAndLongitudinalForce(
             float subStepDeltaTime,
             in VehicleContext context,
             in WheelProperties wheelProperties,
@@ -296,6 +291,7 @@ namespace B3DVehicle
             float desiredLongitudinalImpulse = wheelState.m_transitional.m_desiredLongitudinalImpulse;
 
             float load = Mathf.Max(suspensionState.m_currentSuspensionForce, 0.0f);
+            //TODO: 这里需要综合SlipRatio了
             float friction = wheelProperties.m_slipAngleToGripCurve.Evaluate(Mathf.Abs(wheelState.m_currentSlipAngle));
             friction = Mathf.Max(friction, 0.0f);
             friction *= wheelProperties.m_gripScale;
@@ -326,7 +322,7 @@ namespace B3DVehicle
             wheelState.m_transitional.m_availableGripImpulse = maxGripImpulse;
         }
 
-        public static void IntegrateWheelTransitionalStates(in WheelProperties wheelProperties, ref WheelState wheelState)
+        private static void IntegrateWheelTransitionalStates(in WheelProperties wheelProperties, ref WheelState wheelState)
         {
             wheelState.m_desiredLateralImpulse = wheelState.m_transitional.m_accumDesiredLateralImpulse / wheelState.m_transitional.m_accumDT;
             wheelState.m_desiredLongitudinalImpulse = wheelState.m_transitional.m_accumDesiredLongitudinalImpulse / wheelState.m_transitional.m_accumDT;
@@ -337,6 +333,29 @@ namespace B3DVehicle
             wheelState.m_currentLongitudinalImpulse = wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse / wheelState.m_transitional.m_accumDT;
 
             wheelState.m_currentAngularVelocity = wheelState.m_transitional.m_angularVelocity;
+        }
+
+        private static void UpdateWheelEffectiveMassAtContact(
+            in VehicleState vehicleState,
+            ref WheelState wheelState)
+        {
+            //计算等效质量
+            Vector3 wheelPosRelativeToCentreOfMass = wheelState.m_currentGroundContact_ws - vehicleState.m_b3dBody.worldCenterOfMass;
+            float effectiveMassLateral = ComputeEffectiveMass(vehicleState.m_b3dBody, wheelPosRelativeToCentreOfMass, wheelState.m_currentDirLateral_ws);
+            float effectiveMassLongitudinal = ComputeEffectiveMass(vehicleState.m_b3dBody, wheelPosRelativeToCentreOfMass, wheelState.m_currentDirLongitudinal_ws);
+
+            wheelState.m_effectiveMassAtContactLateral = effectiveMassLateral;
+            wheelState.m_effectiveMassAtContactLongitudinal = effectiveMassLongitudinal;
+        }
+
+        private static void UpdateWheelAngularVelocityFromLateralAndLongitudinalForce(
+            float subStepDeltaTime,
+            in WheelProperties wheelProperties,
+            ref WheelState wheelState)
+        {
+            float angularImpulse = wheelState.m_currentTorque * subStepDeltaTime;
+            wheelState.m_transitional.m_angularVelocity += angularImpulse / wheelProperties.m_inertia;
+            wheelState.m_transitional.m_angularVelocity -= wheelState.m_transitional.m_currentLongitudinalImpulse * wheelProperties.m_wheelRadius / wheelProperties.m_inertia;
         }
 
         public static void UpdateWheelState(
@@ -390,29 +409,6 @@ namespace B3DVehicle
             UpdateWheelEffectiveMassAtContact(vehicleState, ref wheelState);
         }
 
-        public static void UpdateWheelEffectiveMassAtContact(
-            in VehicleState vehicleState, 
-            ref WheelState wheelState)
-        {
-            //计算等效质量
-            Vector3 wheelPosRelativeToCentreOfMass = wheelState.m_currentGroundContact_ws - vehicleState.m_b3dBody.worldCenterOfMass;
-            float effectiveMassLateral = ComputeEffectiveMass(vehicleState.m_b3dBody, wheelPosRelativeToCentreOfMass, wheelState.m_currentDirLateral_ws);
-            float effectiveMassLongitudinal = ComputeEffectiveMass(vehicleState.m_b3dBody, wheelPosRelativeToCentreOfMass, wheelState.m_currentDirLongitudinal_ws);
-
-            wheelState.m_effectiveMassAtContactLateral = effectiveMassLateral;
-            wheelState.m_effectiveMassAtContactLongitudinal = effectiveMassLongitudinal;
-        }
-
-        public static void UpdateWheelAngularVelocityFromLateralAndLongitudinalForce(
-            float subStepDeltaTime,
-            in WheelProperties wheelProperties,
-            ref WheelState wheelState)
-        {
-            float angularImpulse = wheelState.m_currentTorque * subStepDeltaTime;
-            wheelState.m_transitional.m_angularVelocity += angularImpulse / wheelProperties.m_inertia;
-            wheelState.m_transitional.m_angularVelocity -= wheelState.m_transitional.m_currentLongitudinalImpulse * wheelProperties.m_wheelRadius / wheelProperties.m_inertia;
-        }
-
         public static void UpdateVehicleStateFromWheel(
             in WheelState wheelState,
             ref VehicleState vehicleState)
@@ -429,25 +425,7 @@ namespace B3DVehicle
             }
         }
 
-        public static void UpdateWheelAndApplyToVehicle_Main(
-            float fixedDeltaTime,
-            in VehicleContext context,
-            in SuspensionProperties suspensionProperties,
-            in WheelProperties wheelProperties,
-            in SuspensionState suspensionState,
-            ref WheelState wheelState,
-            ref VehicleState vehicleState)
-        {
-            UpdateWheelState(
-                context,
-                wheelProperties,
-                suspensionProperties,
-                vehicleState,
-                suspensionState,
-                ref wheelState);
-        }
-
-        public static void UpdateWheelAndApplyToVehicle_PrePhysics(
+        public static void PrepareWheelSubsteps(
             float fixedDeltaTime,
             in VehicleContext context,
             in SuspensionProperties suspensionProperties,
@@ -459,7 +437,7 @@ namespace B3DVehicle
             InitWheelTransitionalStates(ref wheelState);
         }
 
-        public static void UpdateWheelAndApplyToVehicle_SubStep_PrePosIntegration(
+        public static void UpdateWheelSubstep(
             in Vector3 deltaPosition, in Quaternion deltaRotation, float subStepDeltaTime,
             in VehicleContext context,
             in SuspensionProperties suspensionProperties,
@@ -521,7 +499,7 @@ namespace B3DVehicle
             UpdateVehicleStateFromWheel(wheelState, ref vehicleState);
         }
 
-        public static void UpdateWheelAndApplyToVehicle_PostPhysics(
+        public static void FinishWheelSubsteps(
             float fixedDeltaTime,
             in VehicleContext context,
             in SuspensionProperties suspensionProperties,
@@ -534,6 +512,7 @@ namespace B3DVehicle
         }
         #endregion
 
+        #region Vehicle
         public static void ApplyAntiRollBar(
             in VehicleProperties vehicleProperties,
             ref VehicleState vehicleState)
@@ -554,6 +533,7 @@ namespace B3DVehicle
         {
             ApplyAntiRollBar(vehicleProperties, ref vehicleState);
         }
+        #endregion
     }
 
 }
