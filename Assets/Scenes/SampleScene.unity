@@ -906,7 +906,7 @@ Transform:
   m_GameObject: {fileID: 187578690}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.475, y: -0.3, z: 0.35}
+  m_LocalPosition: {x: 0.475, y: -0.023999989, z: 0.35}
   m_LocalScale: {x: 0.4, y: 1, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -930,9 +930,13 @@ MonoBehaviour:
     m_wheelRadius: 0.5
     m_gripScale: 1
     m_inertia: -1
+    m_slipAngleToLateralForceCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
+      type: 2}
     m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
-    m_staticFrictionCoeff: 1.5
+    m_slipRatioToGripCurve: {fileID: 11400000, guid: 36f8bb2b328ed5e4aa5e452362f9f9bd,
+      type: 2}
+    m_staticFrictionCoeff: 1
     m_allowedAngle: 40
   m_wheelState:
     m_currentTorque: 0
@@ -956,18 +960,20 @@ MonoBehaviour:
       m_velocityContact_ws: {x: 0, y: 0, z: 0}
       m_velocityLateral: 0
       m_velocityLongitudinal: 0
+      m_slipAngle: 0
+      m_slipRatio: 0
       m_angularVelocity: 0
-      m_desiredLateralImpulse: 0
-      m_desiredLongitudinalImpulse: 0
-      m_availableGripImpulse: 0
-      m_currentLateralImpulse: 0
-      m_currentLongitudinalImpulse: 0
+      m_substepAccumImpulse: {x: 0, y: 0}
+      m_desiredDeltaLateralImpulse: 0
+      m_desiredDeltaLongitudinalImpulse: 0
+      m_maxGripImpulse: 0
+      m_currentDeltaLateralImpulse: 0
+      m_currentDeltaLongitudinalImpulse: 0
       m_accumDesiredLateralImpulse: 0
       m_accumDesiredLongitudinalImpulse: 0
       m_accumAvailableGripImpulse: 0
       m_accumGeneratedLateralImpulse: 0
       m_accumGeneratedLongitudinalImpulse: 0
-      m_accumDT: 0
     m_desiredLateralImpulse: 0
     m_desiredLongitudinalImpulse: 0
     m_availableGripImpulse: 0
@@ -989,9 +995,9 @@ MonoBehaviour:
   m_suspensionProperties:
     m_posConnection_vehicle_ls: {x: 0, y: 0, z: 0}
     m_suspensionDirection_vehicle_ls: {x: 0, y: 1, z: 0}
-    m_suspensionHardness: 20000
-    m_suspensionDamper: 5000
-    m_suspensionLength: 0.2
+    m_suspensionHardness: 30000
+    m_suspensionDamper: 7000
+    m_suspensionLength: 0.4
   m_suspensionState:
     m_currentSuspensionVelocity: 0
     m_currentSuspensionCompression: 0
@@ -1445,8 +1451,10 @@ MonoBehaviour:
   m_gasInputCurve: {fileID: 0}
   m_maxSteerAngle: 30
   m_steeringInputCurve: {fileID: 0}
-  m_testEngineTorque: 300
+  m_testEngineTorque: 1000
   m_debugDrawScale: 0.1
+  m_debugUseLockedSteering: 0
+  m_debugLockedSteering: 0
 --- !u!114 &295247343
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1670,7 +1678,7 @@ Transform:
   m_GameObject: {fileID: 321573842}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.475, y: -0.3, z: 0.35}
+  m_LocalPosition: {x: -0.475, y: -0.024, z: 0.35}
   m_LocalScale: {x: 0.4, y: 1, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1694,9 +1702,13 @@ MonoBehaviour:
     m_wheelRadius: 0.5
     m_gripScale: 1
     m_inertia: -1
+    m_slipAngleToLateralForceCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
+      type: 2}
     m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
-    m_staticFrictionCoeff: 1.5
+    m_slipRatioToGripCurve: {fileID: 11400000, guid: 36f8bb2b328ed5e4aa5e452362f9f9bd,
+      type: 2}
+    m_staticFrictionCoeff: 1
     m_allowedAngle: 40
   m_wheelState:
     m_currentTorque: 0
@@ -1720,18 +1732,20 @@ MonoBehaviour:
       m_velocityContact_ws: {x: 0, y: 0, z: 0}
       m_velocityLateral: 0
       m_velocityLongitudinal: 0
+      m_slipAngle: 0
+      m_slipRatio: 0
       m_angularVelocity: 0
-      m_desiredLateralImpulse: 0
-      m_desiredLongitudinalImpulse: 0
-      m_availableGripImpulse: 0
-      m_currentLateralImpulse: 0
-      m_currentLongitudinalImpulse: 0
+      m_substepAccumImpulse: {x: 0, y: 0}
+      m_desiredDeltaLateralImpulse: 0
+      m_desiredDeltaLongitudinalImpulse: 0
+      m_maxGripImpulse: 0
+      m_currentDeltaLateralImpulse: 0
+      m_currentDeltaLongitudinalImpulse: 0
       m_accumDesiredLateralImpulse: 0
       m_accumDesiredLongitudinalImpulse: 0
       m_accumAvailableGripImpulse: 0
       m_accumGeneratedLateralImpulse: 0
       m_accumGeneratedLongitudinalImpulse: 0
-      m_accumDT: 0
     m_desiredLateralImpulse: 0
     m_desiredLongitudinalImpulse: 0
     m_availableGripImpulse: 0
@@ -1753,9 +1767,9 @@ MonoBehaviour:
   m_suspensionProperties:
     m_posConnection_vehicle_ls: {x: 0, y: 0, z: 0}
     m_suspensionDirection_vehicle_ls: {x: 0, y: 1, z: 0}
-    m_suspensionHardness: 20000
-    m_suspensionDamper: 5000
-    m_suspensionLength: 0.2
+    m_suspensionHardness: 30000
+    m_suspensionDamper: 7000
+    m_suspensionLength: 0.4
   m_suspensionState:
     m_currentSuspensionVelocity: 0
     m_currentSuspensionCompression: 0
@@ -4880,7 +4894,7 @@ Transform:
   m_GameObject: {fileID: 1334842682}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.475, y: -0.3, z: -0.35}
+  m_LocalPosition: {x: 0.475, y: -0.023999989, z: -0.35}
   m_LocalScale: {x: 0.4, y: 1, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -4904,9 +4918,13 @@ MonoBehaviour:
     m_wheelRadius: 0.5
     m_gripScale: 1
     m_inertia: -1
+    m_slipAngleToLateralForceCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
+      type: 2}
     m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
-    m_staticFrictionCoeff: 1.5
+    m_slipRatioToGripCurve: {fileID: 11400000, guid: 36f8bb2b328ed5e4aa5e452362f9f9bd,
+      type: 2}
+    m_staticFrictionCoeff: 1
     m_allowedAngle: 40
   m_wheelState:
     m_currentTorque: 0
@@ -4930,18 +4948,20 @@ MonoBehaviour:
       m_velocityContact_ws: {x: 0, y: 0, z: 0}
       m_velocityLateral: 0
       m_velocityLongitudinal: 0
+      m_slipAngle: 0
+      m_slipRatio: 0
       m_angularVelocity: 0
-      m_desiredLateralImpulse: 0
-      m_desiredLongitudinalImpulse: 0
-      m_availableGripImpulse: 0
-      m_currentLateralImpulse: 0
-      m_currentLongitudinalImpulse: 0
+      m_substepAccumImpulse: {x: 0, y: 0}
+      m_desiredDeltaLateralImpulse: 0
+      m_desiredDeltaLongitudinalImpulse: 0
+      m_maxGripImpulse: 0
+      m_currentDeltaLateralImpulse: 0
+      m_currentDeltaLongitudinalImpulse: 0
       m_accumDesiredLateralImpulse: 0
       m_accumDesiredLongitudinalImpulse: 0
       m_accumAvailableGripImpulse: 0
       m_accumGeneratedLateralImpulse: 0
       m_accumGeneratedLongitudinalImpulse: 0
-      m_accumDT: 0
     m_desiredLateralImpulse: 0
     m_desiredLongitudinalImpulse: 0
     m_availableGripImpulse: 0
@@ -4963,9 +4983,9 @@ MonoBehaviour:
   m_suspensionProperties:
     m_posConnection_vehicle_ls: {x: 0, y: 0, z: 0}
     m_suspensionDirection_vehicle_ls: {x: 0, y: 1, z: 0}
-    m_suspensionHardness: 20000
-    m_suspensionDamper: 5000
-    m_suspensionLength: 0.2
+    m_suspensionHardness: 30000
+    m_suspensionDamper: 7000
+    m_suspensionLength: 0.4
   m_suspensionState:
     m_currentSuspensionVelocity: 0
     m_currentSuspensionCompression: 0
@@ -5461,7 +5481,7 @@ Transform:
   m_GameObject: {fileID: 1568680976}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.475, y: -0.3, z: -0.35}
+  m_LocalPosition: {x: -0.475, y: -0.023999989, z: -0.35}
   m_LocalScale: {x: 0.4, y: 1, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -5485,9 +5505,13 @@ MonoBehaviour:
     m_wheelRadius: 0.5
     m_gripScale: 1
     m_inertia: -1
+    m_slipAngleToLateralForceCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
+      type: 2}
     m_slipAngleToGripCurve: {fileID: 11400000, guid: c47de5f265f3483488c635c23783ea66,
       type: 2}
-    m_staticFrictionCoeff: 1.5
+    m_slipRatioToGripCurve: {fileID: 11400000, guid: 36f8bb2b328ed5e4aa5e452362f9f9bd,
+      type: 2}
+    m_staticFrictionCoeff: 1
     m_allowedAngle: 40
   m_wheelState:
     m_currentTorque: 0
@@ -5511,18 +5535,20 @@ MonoBehaviour:
       m_velocityContact_ws: {x: 0, y: 0, z: 0}
       m_velocityLateral: 0
       m_velocityLongitudinal: 0
+      m_slipAngle: 0
+      m_slipRatio: 0
       m_angularVelocity: 0
-      m_desiredLateralImpulse: 0
-      m_desiredLongitudinalImpulse: 0
-      m_availableGripImpulse: 0
-      m_currentLateralImpulse: 0
-      m_currentLongitudinalImpulse: 0
+      m_substepAccumImpulse: {x: 0, y: 0}
+      m_desiredDeltaLateralImpulse: 0
+      m_desiredDeltaLongitudinalImpulse: 0
+      m_maxGripImpulse: 0
+      m_currentDeltaLateralImpulse: 0
+      m_currentDeltaLongitudinalImpulse: 0
       m_accumDesiredLateralImpulse: 0
       m_accumDesiredLongitudinalImpulse: 0
       m_accumAvailableGripImpulse: 0
       m_accumGeneratedLateralImpulse: 0
       m_accumGeneratedLongitudinalImpulse: 0
-      m_accumDT: 0
     m_desiredLateralImpulse: 0
     m_desiredLongitudinalImpulse: 0
     m_availableGripImpulse: 0
@@ -5544,9 +5570,9 @@ MonoBehaviour:
   m_suspensionProperties:
     m_posConnection_vehicle_ls: {x: 0, y: 0, z: 0}
     m_suspensionDirection_vehicle_ls: {x: 0, y: 1, z: 0}
-    m_suspensionHardness: 20000
-    m_suspensionDamper: 5000
-    m_suspensionLength: 0.2
+    m_suspensionHardness: 30000
+    m_suspensionDamper: 7000
+    m_suspensionLength: 0.4
   m_suspensionState:
     m_currentSuspensionVelocity: 0
     m_currentSuspensionCompression: 0

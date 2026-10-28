@@ -197,129 +197,24 @@ namespace B3DVehicle
             wheelState.m_transitional.m_velocityContact_ws = Vector3.zero;
             wheelState.m_transitional.m_velocityLateral = 0.0f;
             wheelState.m_transitional.m_velocityLongitudinal = 0.0f;
-            wheelState.m_transitional.m_angularVelocity = wheelState.m_currentAngularVelocity;
-            
-            wheelState.m_transitional.m_desiredLateralImpulse = 0.0f;
-            wheelState.m_transitional.m_desiredLongitudinalImpulse = 0.0f;
+            wheelState.m_transitional.m_slipAngle = 0.0f;
+            wheelState.m_transitional.m_slipRatio = 0.0f;
 
-            wheelState.m_transitional.m_currentLateralImpulse = 0.0f;
-            wheelState.m_transitional.m_currentLongitudinalImpulse = 0.0f;
+            wheelState.m_transitional.m_angularVelocity = wheelState.m_currentAngularVelocity;
+
+            wheelState.m_transitional.m_substepAccumImpulse = Vector2.zero;
+
+            wheelState.m_transitional.m_desiredDeltaLateralImpulse = 0.0f;
+            wheelState.m_transitional.m_desiredDeltaLongitudinalImpulse = 0.0f;
+            wheelState.m_transitional.m_maxGripImpulse = 0.0f;
+            wheelState.m_transitional.m_currentDeltaLateralImpulse = 0.0f;
+            wheelState.m_transitional.m_currentDeltaLongitudinalImpulse = 0.0f;
 
             wheelState.m_transitional.m_accumDesiredLateralImpulse = 0.0f;
             wheelState.m_transitional.m_accumDesiredLongitudinalImpulse = 0.0f;
             wheelState.m_transitional.m_accumAvailableGripImpulse = 0.0f;
             wheelState.m_transitional.m_accumGeneratedLateralImpulse = 0.0f;
             wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse = 0.0f;
-            wheelState.m_transitional.m_accumDT = 0.0f;
-        }
-
-        private static void CalculateWheelTransitionalVelocityStates(
-            in VehicleState vehicleState,
-            ref WheelState wheelState)
-        {
-            Vector3 centerPos_ws = vehicleState.m_b3dBody.transform.position;
-
-            Vector3 velocity = vehicleState.m_b3dBody.velocity;
-            Vector3 angularVelocity = vehicleState.m_b3dBody.angularVelocity;
-
-            Vector3 velocityContact_ws = GetVelocityAtPoint(velocity, angularVelocity, centerPos_ws, wheelState.m_currentGroundContact_ws);
-            float velocityLateral = Vector3.Dot(velocityContact_ws, wheelState.m_currentDirLateral_ws);
-            float velocityLongitudinal = Vector3.Dot(velocityContact_ws, wheelState.m_currentDirLongitudinal_ws);
-
-            wheelState.m_transitional.m_velocityContact_ws = velocityContact_ws;
-            wheelState.m_transitional.m_velocityLateral = velocityLateral;
-            wheelState.m_transitional.m_velocityLongitudinal = velocityLongitudinal;
-        }
-
-        private static void CalculateWheelDesiredLateralForce(
-            float subStepDeltaTime,
-            in VehicleContext context,
-            in WheelProperties wheelProperties,
-            in VehicleState vehicleState,
-            ref WheelState wheelState)
-        {
-            //全量抵消轮胎侧向滑动所需的力
-            float velocityLateral = wheelState.m_transitional.m_velocityLateral;
-
-            Vector3 wheelPosRelativeToCentreOfMass = wheelState.m_currentGroundContact_ws - vehicleState.m_b3dBody.worldCenterOfMass;
-            float effectiveMass = wheelState.m_effectiveMassAtContactLateral;
-            float desiredLateralImpulse = -velocityLateral * effectiveMass;
-
-            wheelState.m_transitional.m_desiredLateralImpulse = desiredLateralImpulse;
-        }
-
-        private static void CalculateWheelDesiredLongitudinalForce(
-            float subStepDeltaTime, 
-            in VehicleContext context,
-            in WheelProperties wheelProperties,
-            in VehicleState vehicleState,
-            ref WheelState wheelState)
-        {
-            float contactPointVelocity = wheelState.m_transitional.m_velocityLongitudinal;
-            float wheelLinearVelocity = wheelState.m_transitional.m_angularVelocity * wheelProperties.m_wheelRadius;
-            float effectiveMassAtContact = wheelState.m_effectiveMassAtContactLongitudinal;
-            float angularImpulse = wheelState.m_currentTorque * subStepDeltaTime;
-            float radWheel = wheelProperties.m_wheelRadius;
-            float wheelInertia = wheelProperties.m_inertia;
-
-            //float slipRatio = CalculateSlipRatio(wheelLinearVelocity, contactPointVelocity);
-
-            float forwardSlipVelocity = wheelLinearVelocity - contactPointVelocity; //How much wheel is faster than vehicle. 
-            //阻止Slip所需的impulse
-            float impulseRequiredToCounterSlip = forwardSlipVelocity / (1 / effectiveMassAtContact + radWheel * radWheel / wheelInertia);
-
-            //Non-slip情况下，维持non-slip所需要的impulse
-            float impulseDrive = angularImpulse / (radWheel + (wheelInertia / (effectiveMassAtContact * radWheel)));
-
-            //两者合并为non slip所需的impulse
-            float desiredLongitudinalImpulse = impulseDrive + impulseRequiredToCounterSlip;
-
-            wheelState.m_transitional.m_desiredLongitudinalImpulse = desiredLongitudinalImpulse;
-
-            //Debug.Log($"slipRatio{slipRatio}(whl{wheelLinearVelocity} vs grnd{contactPointVelocity}), slipVelocity{forwardSlipVelocity}, impulseCntSlip{impulseRequiredToCounterSlip}, impulseDrive{impulseDrive}");
-        }
-
-        private static void CalculateWheelLateralAndLongitudinalForce(
-            float subStepDeltaTime,
-            in VehicleContext context,
-            in WheelProperties wheelProperties,
-            in VehicleState vehicleState,
-            in SuspensionState suspensionState,
-            ref WheelState wheelState)
-        {
-            float desiredLateralImpulse = wheelState.m_transitional.m_desiredLateralImpulse;
-            float desiredLongitudinalImpulse = wheelState.m_transitional.m_desiredLongitudinalImpulse;
-
-            float load = Mathf.Max(suspensionState.m_currentSuspensionForce, 0.0f);
-            //TODO: 这里需要综合SlipRatio了
-            float friction = wheelProperties.m_slipAngleToGripCurve.Evaluate(Mathf.Abs(wheelState.m_currentSlipAngle));
-            friction = Mathf.Max(friction, 0.0f);
-            friction *= wheelProperties.m_gripScale;
-            friction *= context.m_surfaceFrictionCoeff;
-            //TODO: 这里之后换成一个曲线。Load和Friction不是线性关系
-            float maxGripImpulse = friction * load * subStepDeltaTime;
-            maxGripImpulse = Mathf.Max(maxGripImpulse, 0.0f);
-
-            //Clamp impulses by available friction circle
-            float lateralImpulse = 0.0f;
-            float longitudinalImpulse = 0.0f;
-            Vector2 desiredImpulses = new Vector2(desiredLateralImpulse, desiredLongitudinalImpulse);
-            if (desiredImpulses.sqrMagnitude <= maxGripImpulse * maxGripImpulse) //Enough grip for everything! 
-            {
-                //Lateral and Longitudinal stays the same
-                lateralImpulse = desiredImpulses.x;
-                longitudinalImpulse = desiredImpulses.y;
-            }
-            else //Not enough grip... 
-            {
-                desiredImpulses.Normalize();
-                lateralImpulse = desiredImpulses.x * maxGripImpulse;
-                longitudinalImpulse = desiredImpulses.y * maxGripImpulse;
-            }
-
-            wheelState.m_transitional.m_currentLateralImpulse = lateralImpulse;
-            wheelState.m_transitional.m_currentLongitudinalImpulse = longitudinalImpulse;
-            wheelState.m_transitional.m_availableGripImpulse = maxGripImpulse;
         }
 
         private static void IntegrateWheelTransitionalStates(in WheelProperties wheelProperties, ref WheelState wheelState)
@@ -346,16 +241,6 @@ namespace B3DVehicle
 
             wheelState.m_effectiveMassAtContactLateral = effectiveMassLateral;
             wheelState.m_effectiveMassAtContactLongitudinal = effectiveMassLongitudinal;
-        }
-
-        private static void UpdateWheelAngularVelocityFromLateralAndLongitudinalForce(
-            float subStepDeltaTime,
-            in WheelProperties wheelProperties,
-            ref WheelState wheelState)
-        {
-            float angularImpulse = wheelState.m_currentTorque * subStepDeltaTime;
-            wheelState.m_transitional.m_angularVelocity += angularImpulse / wheelProperties.m_inertia;
-            wheelState.m_transitional.m_angularVelocity -= wheelState.m_transitional.m_currentLongitudinalImpulse * wheelProperties.m_wheelRadius / wheelProperties.m_inertia;
         }
 
         public static void UpdateWheelState(
@@ -389,8 +274,6 @@ namespace B3DVehicle
             float slipAngle = Mathf.Atan2(Mathf.Abs(wheelV_Lateral_Ground), Mathf.Max(Mathf.Abs(wheelV_Fwd_Ground), EPS));
             slipAngle = Mathf.Rad2Deg * slipAngle;
 
-            Vector3 wheelVelocityLateral_ws = wheelV_Lateral_Ground * dirLateral_ws;
-
             float wheelLinearV = wheelState.m_currentAngularVelocity * wheelProperties.m_wheelRadius;
             float slipRatio = CalculateSlipRatio(wheelLinearV, wheelV_Fwd_Ground);
 
@@ -409,22 +292,6 @@ namespace B3DVehicle
             UpdateWheelEffectiveMassAtContact(vehicleState, ref wheelState);
         }
 
-        public static void UpdateVehicleStateFromWheel(
-            in WheelState wheelState,
-            ref VehicleState vehicleState)
-        {
-            if (Mathf.Abs(wheelState.m_transitional.m_currentLateralImpulse) >= EPS)
-            {
-                Vector3 lateralImpulse = wheelState.m_currentDirLateral_ws * wheelState.m_transitional.m_currentLateralImpulse;
-                vehicleState.m_b3dBody.AddForceAtPosition(lateralImpulse, wheelState.m_currentPos_ws, ForceMode.Impulse, false);
-            }
-            if (Mathf.Abs(wheelState.m_transitional.m_currentLongitudinalImpulse) >= EPS)
-            {
-                Vector3 longitudinalImpulse = wheelState.m_currentDirLongitudinal_ws * wheelState.m_transitional.m_currentLongitudinalImpulse;
-                vehicleState.m_b3dBody.AddForceAtPosition(longitudinalImpulse, wheelState.m_currentPos_ws, ForceMode.Impulse, false);
-            }
-        }
-
         public static void PrepareWheelSubsteps(
             float fixedDeltaTime,
             in VehicleContext context,
@@ -437,67 +304,227 @@ namespace B3DVehicle
             InitWheelTransitionalStates(ref wheelState);
         }
 
-        public static void UpdateWheelSubstep(
-            in Vector3 deltaPosition, in Quaternion deltaRotation, 
-            float subStepDeltaTime, 
+        private static void CalculateWheelTransitionalVelocityStates(
+            in WheelProperties wheelProperty,
+            in VehicleState vehicleState,
+            ref WheelState wheelState)
+        {
+            Vector3 centerPos_ws = vehicleState.m_b3dBody.transform.position;
+
+            Vector3 velocity = vehicleState.m_b3dBody.velocity;
+            Vector3 angularVelocity = vehicleState.m_b3dBody.angularVelocity;
+
+            Vector3 velocityContact_ws = GetVelocityAtPoint(velocity, angularVelocity, centerPos_ws, wheelState.m_currentGroundContact_ws);
+            float velocityLateral = Vector3.Dot(velocityContact_ws, wheelState.m_currentDirLateral_ws);
+            float velocityLongitudinal = Vector3.Dot(velocityContact_ws, wheelState.m_currentDirLongitudinal_ws);
+
+            //Re-calculate slip
+            float slipAngle = Mathf.Atan2(Mathf.Abs(velocityLateral), Mathf.Max(Mathf.Abs(velocityLongitudinal), EPS));
+            slipAngle = Mathf.Rad2Deg * slipAngle;
+
+            float wheelLinearV = wheelState.m_transitional.m_angularVelocity * wheelProperty.m_wheelRadius;
+            float slipRatio = CalculateSlipRatio(wheelLinearV, velocityLongitudinal);
+
+            wheelState.m_transitional.m_velocityContact_ws = velocityContact_ws;
+            wheelState.m_transitional.m_velocityLateral = velocityLateral;
+            wheelState.m_transitional.m_velocityLongitudinal = velocityLongitudinal;
+            wheelState.m_transitional.m_slipAngle = slipAngle;
+            wheelState.m_transitional.m_slipRatio = slipRatio;
+        }
+
+        private static float CalculateWheelLateralResponseForce(
+            float deltaTime,
             in VehicleContext context,
-            in SuspensionProperties suspensionProperties,
             in WheelProperties wheelProperties,
+            in VehicleState vehicleState,
             in SuspensionState suspensionState,
-            ref WheelState wheelState,
+            ref WheelState wheelState)
+        {
+            float responseImpulse = 0.0f;
+            float load = Mathf.Max(suspensionState.m_currentSuspensionForce, 0.0f);
+
+            if (wheelProperties.m_slipAngleToLateralForceCurve)
+            {
+                responseImpulse = wheelProperties.m_slipAngleToLateralForceCurve.Evaluate(Mathf.Abs(wheelState.m_transitional.m_slipAngle));
+                responseImpulse = Mathf.Max(0, responseImpulse);
+                responseImpulse *= load;
+                responseImpulse *= wheelProperties.m_staticFrictionCoeff;
+                responseImpulse *= context.m_surfaceFrictionCoeff;
+                responseImpulse *= deltaTime;
+            }
+
+            return responseImpulse;
+        }
+
+        private static void CalculateWheelDesiredLateralCounterSlipForce(
+            float deltaTime,
+            in VehicleContext context,
+            in WheelProperties wheelProperties,
+            in VehicleState vehicleState,
+            in SuspensionState suspensionState,
+            ref WheelState wheelState)
+        {
+            //Impulse required to eliminate all lateral motion. This is calculated as a constraint. 
+            float velocityLateral = wheelState.m_transitional.m_velocityLateral;
+            float dirCounterLateral = -Mathf.Sign(velocityLateral);
+            float effectiveMass = wheelState.m_effectiveMassAtContactLateral;
+            float lateralImpulseConstraint = Mathf.Abs(velocityLateral) * effectiveMass;
+            lateralImpulseConstraint = Mathf.Max(0.0f, lateralImpulseConstraint);
+
+            float responseImpulse = CalculateWheelLateralResponseForce(
+                deltaTime, context, wheelProperties, vehicleState, suspensionState,
+                ref wheelState);
+            responseImpulse = Mathf.Max(0.0f, responseImpulse);
+
+            float desiredLateralImpulse = dirCounterLateral * Mathf.Min(lateralImpulseConstraint, responseImpulse);
+
+            wheelState.m_transitional.m_desiredDeltaLateralImpulse = desiredLateralImpulse;
+        }
+
+        private static void CalculateWheelDesiredLongitudinalCounterSlipForce(
+            in VehicleContext context,
+            in WheelProperties wheelProperty,
+            in VehicleState vehicleState,
+            ref WheelState wheelState)
+        {
+            float contactPointVelocity = wheelState.m_transitional.m_velocityLongitudinal;
+            float wheelLinearVelocity = wheelState.m_transitional.m_angularVelocity * wheelProperty.m_wheelRadius;
+            float effectiveMassAtContact = wheelState.m_effectiveMassAtContactLongitudinal;
+            float radWheel = wheelProperty.m_wheelRadius;
+            float wheelInertia = wheelProperty.m_inertia;
+
+            float forwardSlipVelocity = wheelLinearVelocity - contactPointVelocity; //How much wheel is faster than vehicle. 
+            //阻止Slip所需的impulse
+            float impulseRequiredToCounterSlip = forwardSlipVelocity / (1 / effectiveMassAtContact + radWheel * radWheel / wheelInertia);
+
+            if(wheelProperty.m_slipRatioToGripCurve)
+            {
+                float scale = wheelProperty.m_slipRatioToGripCurve.Evaluate(Mathf.Abs(wheelState.m_transitional.m_slipRatio));
+                scale = Mathf.Max(0, scale);
+                impulseRequiredToCounterSlip *= scale;
+            }
+
+            wheelState.m_transitional.m_desiredDeltaLongitudinalImpulse = impulseRequiredToCounterSlip;
+        }
+
+        private static void CalculateMaxGrip(
+            float subStepDeltaTime,
+            in VehicleContext context,
+            in WheelProperties wheelProperty,
+            in SuspensionState suspensionState,
+            ref WheelState wheelState)
+        {
+            //计算可用的Grip
+            float load = Mathf.Max(suspensionState.m_currentSuspensionForce, 0.0f);
+
+            float friction = load;
+            friction *= wheelProperty.m_gripScale;
+            friction *= context.m_surfaceFrictionCoeff;
+            friction *= wheelProperty.m_staticFrictionCoeff;
+            float maxGripImpulse = friction * subStepDeltaTime;
+
+            //TODO: 这里之后换成一个曲线。Load和Friction不是线性关系
+            maxGripImpulse = Mathf.Max(maxGripImpulse, 0.0f);
+
+            wheelState.m_transitional.m_maxGripImpulse = maxGripImpulse;
+        }
+
+        public static void UpdateWheelSubstep(
+            in Vector3 deltaPosition, in Quaternion deltaRotation,
+            float subStepDeltaTime,
+            in VehicleContext context,
+            int wheelCount, int iterCount,
+            in List<Suspension> suspensions,
+            in List<Wheel> wheels,
             ref VehicleState vehicleState)
         {
-            wheelState.m_transitional.m_accumDT += subStepDeltaTime;
-
-            if (!wheelState.m_isGrounded)
+            // Initialize for iterations
+            for (int i = 0; i < wheelCount; ++i)
             {
-                wheelState.m_transitional.m_velocityContact_ws = Vector3.zero;
-                wheelState.m_transitional.m_velocityLateral = 0.0f;
-                wheelState.m_transitional.m_velocityLongitudinal = 0.0f;
+                // Spin the wheel
+                WheelState wheelState = wheels[i].m_wheelState;
+                WheelProperties wheelProperty = wheels[i].m_wheelProperties;
+                SuspensionState suspensionState = suspensions[i].m_suspensionState;
 
-                wheelState.m_transitional.m_desiredLateralImpulse = 0.0f;
-                wheelState.m_transitional.m_desiredLongitudinalImpulse = 0.0f;
+                //Update wheel torque
+                float angularImpulse = wheelState.m_currentTorque * subStepDeltaTime;
+                wheelState.m_transitional.m_angularVelocity += angularImpulse / wheelProperty.m_inertia;
 
-                wheelState.m_transitional.m_availableGripImpulse = 0.0f;
+                wheelState.m_transitional.m_substepAccumImpulse = Vector2.zero;
 
-                wheelState.m_transitional.m_currentLateralImpulse = 0.0f;
-                wheelState.m_transitional.m_currentLongitudinalImpulse = 0.0f;
-
-                UpdateWheelAngularVelocityFromLateralAndLongitudinalForce(subStepDeltaTime, wheelProperties, ref wheelState);
-
-                return;
+                CalculateMaxGrip(subStepDeltaTime, context, wheelProperty, suspensionState, ref wheelState);
             }
 
-            CalculateWheelTransitionalVelocityStates(vehicleState, ref wheelState);
-            CalculateWheelDesiredLateralForce(
-                subStepDeltaTime, context, wheelProperties, vehicleState, ref wheelState);
-            CalculateWheelDesiredLongitudinalForce(
-                subStepDeltaTime, context, wheelProperties, vehicleState, ref wheelState);
-
-            wheelState.m_transitional.m_accumDesiredLateralImpulse += wheelState.m_transitional.m_desiredLateralImpulse;
-            wheelState.m_transitional.m_accumDesiredLongitudinalImpulse += wheelState.m_transitional.m_desiredLongitudinalImpulse;
-
-            CalculateWheelLateralAndLongitudinalForce(
-                subStepDeltaTime, context, wheelProperties, vehicleState, suspensionState, ref wheelState);
-
-            wheelState.m_transitional.m_accumAvailableGripImpulse += wheelState.m_transitional.m_availableGripImpulse;
-
-            UpdateWheelAngularVelocityFromLateralAndLongitudinalForce(subStepDeltaTime, wheelProperties, ref wheelState);
-
-            //Calculate accumulative statistics
-            if (Mathf.Abs(wheelState.m_transitional.m_currentLateralImpulse) < EPS)
+            //Debug.Log($"----------- STEP -------------");
+            for (int iter = 0; iter < iterCount; ++iter)
             {
-                wheelState.m_transitional.m_currentLateralImpulse = 0.0f;
+                //Debug.Log($"Iter{iter} -------------");
+
+                for (int i = 0; i < wheelCount; ++i)
+                {
+                    WheelState wheelState = wheels[i].m_wheelState;
+                    WheelProperties wheelProperty = wheels[i].m_wheelProperties;
+                    SuspensionState suspensionState = suspensions[i].m_suspensionState;
+
+                    if (!wheelState.m_isGrounded)
+                    {
+                        wheelState.m_transitional.m_velocityContact_ws = Vector3.zero;
+                        wheelState.m_transitional.m_velocityLateral = 0.0f;
+                        wheelState.m_transitional.m_velocityLongitudinal = 0.0f;
+                        wheelState.m_transitional.m_slipAngle = 0.0f;
+                        wheelState.m_transitional.m_slipRatio = 0.0f;
+
+                        wheelState.m_transitional.m_desiredDeltaLateralImpulse = 0.0f;
+                        wheelState.m_transitional.m_desiredDeltaLongitudinalImpulse = 0.0f;
+
+                        wheelState.m_transitional.m_currentDeltaLateralImpulse = 0.0f;
+                        wheelState.m_transitional.m_currentDeltaLongitudinalImpulse = 0.0f;
+                    }
+                    else
+                    {
+                        CalculateWheelTransitionalVelocityStates(wheelProperty, vehicleState, ref wheelState);
+                        CalculateWheelDesiredLateralCounterSlipForce(
+                            subStepDeltaTime, context, wheelProperty, vehicleState, suspensionState, ref wheelState);
+                        CalculateWheelDesiredLongitudinalCounterSlipForce(context, wheelProperty, vehicleState, ref wheelState);
+
+                        // Clamp desired impulse
+                        Vector2 newAccumImpulse = wheelState.m_transitional.m_substepAccumImpulse + new Vector2(
+                            wheelState.m_transitional.m_desiredDeltaLateralImpulse, 
+                            wheelState.m_transitional.m_desiredDeltaLongitudinalImpulse);
+                        newAccumImpulse = Vector2.ClampMagnitude(newAccumImpulse, wheelState.m_transitional.m_maxGripImpulse);
+
+                        Vector2 clampedCorrectionImpulse = newAccumImpulse - wheelState.m_transitional.m_substepAccumImpulse;
+                        float deltaLateralImpulse = clampedCorrectionImpulse.x;
+                        float deltaLongitudinalImpulse = clampedCorrectionImpulse.y;
+                        wheelState.m_transitional.m_substepAccumImpulse = newAccumImpulse;
+
+                        // Apply impulses
+                        Vector3 lateralImpulse = wheelState.m_currentDirLateral_ws * deltaLateralImpulse;
+                        vehicleState.m_b3dBody.AddForceAtPosition(lateralImpulse, wheelState.m_currentPos_ws, ForceMode.Impulse, false);
+
+                        Vector3 longitudinalImpulse = wheelState.m_currentDirLongitudinal_ws * deltaLongitudinalImpulse;
+                        vehicleState.m_b3dBody.AddForceAtPosition(longitudinalImpulse, wheelState.m_currentPos_ws, ForceMode.Impulse, false);
+
+                        // Slowdown wheel
+                        wheelState.m_transitional.m_angularVelocity -= deltaLongitudinalImpulse * wheelProperty.m_wheelRadius / wheelProperty.m_inertia;
+
+                        
+                        // Accumulations
+                        wheelState.m_transitional.m_accumDesiredLateralImpulse += wheelState.m_transitional.m_desiredDeltaLateralImpulse;
+                        wheelState.m_transitional.m_accumDesiredLongitudinalImpulse += wheelState.m_transitional.m_desiredDeltaLongitudinalImpulse;
+
+                        wheelState.m_transitional.m_accumGeneratedLateralImpulse += deltaLateralImpulse;
+                        wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse += deltaLongitudinalImpulse;
+                    }
+                }
             }
-            if (Mathf.Abs(wheelState.m_transitional.m_currentLongitudinalImpulse) < EPS)
+
+            // Accumulations
+            for (int i = 0; i < wheelCount; ++i)
             {
-                wheelState.m_transitional.m_currentLongitudinalImpulse = 0.0f;
+                WheelState wheelState = wheels[i].m_wheelState;
+                wheelState.m_transitional.m_accumAvailableGripImpulse += wheelState.m_transitional.m_maxGripImpulse;
             }
-
-            wheelState.m_transitional.m_accumGeneratedLateralImpulse += wheelState.m_transitional.m_currentLateralImpulse;
-            wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse += wheelState.m_transitional.m_currentLongitudinalImpulse;
-
-            UpdateVehicleStateFromWheel(wheelState, ref vehicleState);
         }
 
         public static void FinishWheelSubsteps(

@@ -14,11 +14,9 @@ namespace B3DVehicle
         public float m_gripScale = 1.0f;
         [Description("Set to -1 to use automatic calculation from mass")]
         public float m_inertia = -1.0f;
-        //因为轮胎非刚体，所以其最大静态摩擦力与压力的关系并非定值系数，而是曲线
-        public NormalizedCurveAsset m_slipAngleToGripCurve;
+        public NormalizedCurveAsset m_slipAngleToLateralForceCurve;
+        public NormalizedCurveAsset m_slipRatioToGripCurve;
         public float m_staticFrictionCoeff = 0.7f;
-
-        //public float m_dynamicFrictionScale = 0.9f;
 
         public float m_allowedAngle = 40.0f;
     };
@@ -61,23 +59,24 @@ namespace B3DVehicle
         public Vector3 m_velocityContact_ws = Vector3.zero;
         public float m_velocityLateral = 0.0f;
         public float m_velocityLongitudinal = 0.0f;
+        public float m_slipAngle = 0.0f;
+        public float m_slipRatio = 0.0f;
+
         public float m_angularVelocity = 0.0f; //possitive = spin from back to front through top
 
-        public float m_desiredLateralImpulse = 0.0f;
-        public float m_desiredLongitudinalImpulse = 0.0f;
-        
-        public float m_availableGripImpulse = 0.0f;
+        public Vector2 m_substepAccumImpulse = Vector2.zero;
 
-        public float m_currentLateralImpulse = 0.0f;
-        public float m_currentLongitudinalImpulse = 0.0f;
+        public float m_desiredDeltaLateralImpulse = 0.0f;
+        public float m_desiredDeltaLongitudinalImpulse = 0.0f;
+        public float m_maxGripImpulse = 0.0f;
+        public float m_currentDeltaLateralImpulse = 0.0f;
+        public float m_currentDeltaLongitudinalImpulse = 0.0f;
 
-        // 目前先粗略平均一下，以近似这一帧的Lateral和Longitudinal Impulse情况
         public float m_accumDesiredLateralImpulse = 0.0f;
         public float m_accumDesiredLongitudinalImpulse = 0.0f;
         public float m_accumAvailableGripImpulse = 0.0f;
         public float m_accumGeneratedLateralImpulse = 0.0f;
         public float m_accumGeneratedLongitudinalImpulse = 0.0f;
-        public float m_accumDT = 0.0f;
     }
 
     [System.Serializable]

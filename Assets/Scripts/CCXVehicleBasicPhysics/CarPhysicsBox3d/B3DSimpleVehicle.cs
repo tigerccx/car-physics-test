@@ -1,6 +1,7 @@
 using B3DVehicle;
 using Box3D;
 using Box3D.Hybrid;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -51,6 +52,9 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     //Debug
     [Header("Debug")]
     public float m_debugDrawScale = 0.1f;
+
+    [HideInInspector] public bool m_debugUseLockedSteering;
+    [HideInInspector, Range(-1f, 1f)] public float m_debugLockedSteering;
 
     private void OnEnable()
     {
@@ -131,7 +135,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         VehicleInputs inputs = m_vehicleContext.m_inputs;
         inputs.m_throttle = throttleInput;
         //brake = 0.0f;
-        inputs.m_steering = steeringInput;
+        inputs.m_steering = m_debugUseLockedSteering ? Mathf.Clamp(m_debugLockedSteering, -1f, 1f) : steeringInput;
 
         // Remap throttle
         if (m_gasInputCurve)
@@ -308,28 +312,36 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         // But more substeps for wheel simulation itself
 
         int countIterWheel = 4; //More wheel substep
-        float dividedSubStepDeltaTime = subStepDeltaTime / countIterWheel;
-        for (int iterWheel = 0; iterWheel < countIterWheel; ++iterWheel)
-        {
-            foreach (int idx in Enumerable.Range(0, 4).OrderBy(x => m_random.Next()))
-                //for (int i = 0; i < m_suspensions.Count; ++i)
-            {
-                //int idx = (iterWheel + i) % m_suspensions.Count;
+        //float dividedSubStepDeltaTime = subStepDeltaTime / countIterWheel;
+        //for (int iterWheel = 0; iterWheel < countIterWheel; ++iterWheel)
+        //{
+        //    foreach (int idx in Enumerable.Range(0, 4).OrderBy(x => m_random.Next()))
+        //        //for (int i = 0; i < m_suspensions.Count; ++i)
+        //    {
+        //        //int idx = (iterWheel + i) % m_suspensions.Count;
 
-                Suspension suspension = m_suspensions[idx];
-                Wheel wheel = m_wheels[idx];
+        //        Suspension suspension = m_suspensions[idx];
+        //        Wheel wheel = m_wheels[idx];
 
-                VehiclePhysics.UpdateWheelSubstep(
-                    in deltaPosition, in deltaRotation, 
-                    dividedSubStepDeltaTime,
-                    m_vehicleContext,
-                    suspension.m_suspensionProperties,
-                    wheel.m_wheelProperties,
-                    in suspension.m_suspensionState,
-                    ref wheel.m_wheelState,
+        //        VehiclePhysics.UpdateWheelSubstep(
+        //            in deltaPosition, in deltaRotation, 
+        //            dividedSubStepDeltaTime,
+        //            m_vehicleContext,
+        //            suspension.m_suspensionProperties,
+        //            wheel.m_wheelProperties,
+        //            in suspension.m_suspensionState,
+        //            ref wheel.m_wheelState,
+        //            ref m_vehicleState);
+        //    }
+        //}
+
+        VehiclePhysics.UpdateWheelSubstep(
+                    in deltaPosition, in deltaRotation,
+                    subStepDeltaTime,
+                    m_vehicleContext, 4, countIterWheel,
+                    m_suspensions,
+                    m_wheels,
                     ref m_vehicleState);
-            }
-        }
     }
 
     private void UpdateVehiclePhysics_PostPhysics()
@@ -356,7 +368,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     void FixedUpdate()
     {
         CalculateInputState();
-        ApplySteering(steeringInput);
+        ApplySteering(m_vehicleContext.m_inputs.m_steering);
         ApplyDrive();
 
         m_vehicleContext.m_surfaceFrictionCoeff = 1.0f;

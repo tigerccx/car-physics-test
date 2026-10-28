@@ -113,9 +113,22 @@ public class VehicleDebugWindow : EditorWindow
         EditorGUILayout.BeginVertical(compactPanel, GUILayout.ExpandHeight(false));
         GUILayout.Label("---Debug Config---", compactBoldTitle);
         GUILayout.Label("Default traction impulse (N·s)");
-        float configured = EditorGUILayout.FloatField(defaultTractionImpulse, "F3");
+        float configured = EditorGUILayout.FloatField(defaultTractionImpulse);
         defaultTractionImpulse = float.IsNaN(configured) || float.IsInfinity(configured) ? 100f : Mathf.Max(0.00001f, configured);
         GUILayout.Label("Display reference only", compactMini);
+        GUILayout.Space(4f);
+        EditorGUI.BeginChangeCheck();
+        bool useLockedSteering = EditorGUILayout.ToggleLeft("Use Locked Steering", selectedVehicle.m_debugUseLockedSteering);
+        GUILayout.Label("Locked Steering");
+        float lockedSteering = EditorGUILayout.Slider(selectedVehicle.m_debugLockedSteering, -1f, 1f);
+        if (EditorGUI.EndChangeCheck())
+        {
+            Undo.RecordObject(selectedVehicle, "Change debug steering");
+            selectedVehicle.m_debugUseLockedSteering = useLockedSteering;
+            selectedVehicle.m_debugLockedSteering = lockedSteering;
+            EditorUtility.SetDirty(selectedVehicle);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(selectedVehicle);
+        }
         EditorGUILayout.EndVertical();
         // Absorb the wheel columns' extra height outside the Config panel.
         GUILayout.FlexibleSpace();
@@ -386,7 +399,7 @@ public class VehicleDebugWindow : EditorWindow
             if (data.HasPhysicsData)
             {
                 Arrow(center, Project(data.LocalVelocity), 55f, VelocityColor);
-                if (Mathf.Abs(data.LocalYawSpeed) > 0.000001f)
+                if (Mathf.Abs(data.LocalYawSpeed) > 0.001f)
                 {
                     // Share the velocity origin; positive local yaw turns the nose right.
                     Arrow(center, Vector2.right * Mathf.Sign(data.LocalYawSpeed), 42f, YawColor);
