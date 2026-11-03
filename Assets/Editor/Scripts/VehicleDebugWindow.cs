@@ -194,8 +194,15 @@ public class VehicleDebugWindow : EditorWindow
         Transform vehicleTransform = vehicle.transform;
         Vector3 velocity = body.linearVelocity;
         Vector3 angularVelocity = body.angularVelocity;
+        B3DVehicle.DrivingGear gear = VehiclePhysics.GetCurrentGear(vehicle.m_vehicleProperties, vehicle.m_vehicleState);
         target.Speed = velocity.magnitude;
+        target.SpeedMeasured = vehicle.m_vehicleState.m_measuredVehicleSpeed;
         target.SpeedKmH = target.Speed * 3.6f;
+        target.EngineRPM = vehicle.m_vehicleState.m_engineRPM;
+        target.EngineNetTorque = vehicle.m_vehicleState.m_engineNetOutputTorque;
+        target.GearName = gear.m_gearName;
+        target.GearBoxGearRatio = gear.m_gearRatio;
+        target.TotalGearRatio = VehiclePhysics.GetCurrentGearRatio(vehicle.m_vehicleProperties, vehicle.m_vehicleState);
         target.WorldDirection = velocity.normalized;
         target.LocalVelocity = vehicleTransform.InverseTransformDirection(velocity);
         target.AngularSpeed = angularVelocity.magnitude;
@@ -253,10 +260,12 @@ public class VehicleDebugWindow : EditorWindow
             result.DesiredLongitudinal = wheelState.m_desiredLongitudinalImpulse;
             result.AvailableGrip = Mathf.Max(0f, wheelState.m_availableGripImpulse);
             result.UsedGrip = new Vector2(result.LateralImpulse, result.Longitudinal).magnitude;
+            result.RPM = VehiclePhysics.AngularVToRPM(wheelState.m_currentAngularVelocity);
             result.LinearSpeed = wheelState.m_currentAngularVelocity * wheel.m_wheelProperties.m_wheelRadius;
             result.GroundSpeed = wheelState.m_currentVelocityLongitudinal;
             result.SlipRatio = wheelState.m_currentSlipRatio;
             result.Torque = wheelState.m_currentTorque;
+            result.BrakeTorque = wheelState.m_currentBrakeTorque;
             result.Load = Mathf.Max(0f, suspensionState.m_currentSuspensionForce);
             result.LateralSign = Vector3.Dot(wheelState.m_currentDirLateral_ws,
                 vehicleTransform.TransformDirection(Vector3.Cross(Vector3.up, result.LocalForward))) >= 0f ? 1f : -1f;
@@ -279,7 +288,13 @@ public class VehicleDebugWindow : EditorWindow
         EditorGUILayout.BeginVertical(compactPanel, GUILayout.Width(210f), GUILayout.MinHeight(250f));
         GUILayout.Label("---Vehicle---", compactBoldTitle);
         Value("Speed (m/s)", data.Speed);
+        Value("Speed Meter Read (m/s)", data.SpeedMeasured);
         Value("Speed (km/h)", data.SpeedKmH);
+        Value("EngineRPM (r/m)", data.EngineRPM);
+        Value("EngineNetTorque (N·s)", data.EngineNetTorque);
+        Row("Gear", data.GearName);
+        Value("GearBox GearRatio (unitless)", data.GearBoxGearRatio);
+        Value("Total GearRatio (unitless)", data.TotalGearRatio);
         VectorValue("Direction (world, unit vector)", data.WorldDirection);
         Value("Local XZ speed (m/s)", new Vector2(data.LocalVelocity.x, data.LocalVelocity.z).magnitude);
         Value("Angular speed (rad/s)", data.AngularSpeed);
@@ -308,10 +323,12 @@ public class VehicleDebugWindow : EditorWindow
         Value("Slip angle (deg)", wheel.SlipAngle, wheel.HasPhysicsData);
         DrawImpulsePair("Lateral impulse (N·s)", wheel.LateralImpulse, wheel.DesiredLateral, wheel.HasPhysicsData);
         GUILayout.Space(2f);
+        Value("RPM (r/m)", wheel.RPM, wheel.HasPhysicsData);
         Value("Linear V (m/s)", wheel.LinearSpeed, wheel.HasPhysicsData);
         Value("Ground V (m/s)", wheel.GroundSpeed, wheel.HasPhysicsData);
         Value("Slip ratio (unitless)", wheel.SlipRatio, wheel.HasPhysicsData);
         Value("Torque (N·m)", wheel.Torque, wheel.HasPhysicsData);
+        Value("BrakeTorque (N·m)", wheel.BrakeTorque, wheel.HasPhysicsData);
         DrawImpulsePair("Longitudinal impulse (N·s)", wheel.Longitudinal, wheel.DesiredLongitudinal, wheel.HasPhysicsData);
         GUILayout.Space(2f);
         Value("Load (N)", wheel.Load, wheel.HasPhysicsData);
@@ -471,7 +488,11 @@ public class VehicleDebugWindow : EditorWindow
     {
         public bool HasPhysicsData;
         public Vector3 LocalNorth;
-        public float Speed = 0f, SpeedKmH = 0f, AngularSpeed = 0f, LocalYawSpeed = 0f;
+        public float Speed = 0f, SpeedMeasured = 0f, SpeedKmH = 0f;
+        public float EngineRPM = 0f, EngineNetTorque = 0f;
+        public string GearName;
+        public float GearBoxGearRatio = 0f, TotalGearRatio = 0f;
+        public float AngularSpeed = 0f, LocalYawSpeed = 0f;
         public Vector3 WorldDirection = Vector3.zero, LocalVelocity = Vector3.zero, WorldRotationAxis = Vector3.zero;
         public readonly WheelDebugData[] Wheels =
         {
@@ -488,7 +509,7 @@ public class VehicleDebugWindow : EditorWindow
         public float SlipAngle = 0f, LateralImpulse = 0f, TurnAngle = 0f;
         public float AxialVelocity = 0f, Length = 0f, GroundDistance = 0f, DamperForce = 0f, SuspensionForce = 0f;
         public float DesiredLateral, Longitudinal, DesiredLongitudinal, AvailableGrip, UsedGrip;
-        public float LinearSpeed, GroundSpeed, SlipRatio, Torque, Load, LateralSign;
+        public float RPM, LinearSpeed, GroundSpeed, SlipRatio, Torque, BrakeTorque, Load, LateralSign;
         public bool Grounded = false;
     }
 }

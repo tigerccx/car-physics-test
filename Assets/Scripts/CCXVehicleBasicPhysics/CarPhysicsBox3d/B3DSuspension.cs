@@ -13,8 +13,9 @@ namespace B3DVehicle
         [Header("Debug")]
         float m_debugDrawScale = 1f;
 
-        private void Start()
+        private void Awake()
         {
+            // Give a default value
             m_suspensionProperties.m_posConnection_vehicle_ls = transform.localPosition;
         }
 

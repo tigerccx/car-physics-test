@@ -15,6 +15,8 @@ namespace B3DVehicle
     public class VehiclePhysics
     {
         static float EPS = 1e-6f;
+        static float RPM_TO_AV = Mathf.PI / 30.0f;
+        static float AV_TO_RPM = 1.0f / RPM_TO_AV;
 
         #region Utility
         private static float ComputeEffectiveMass(
@@ -50,6 +52,504 @@ namespace B3DVehicle
             Vector3 velocityAtPoint = velocity + Vector3.Cross(angularVelocity, offset_ws);
 
             return velocityAtPoint;
+        }
+
+        public static float RPMToAngularV(float rpm)
+        {
+            return rpm * RPM_TO_AV;
+        }
+        public static float AngularVToRPM(float angularVelocity)
+        {
+            return angularVelocity * AV_TO_RPM;
+        }
+        private static float GetAverageDrivingWheelRad(in List<Wheel> wheels)
+        {
+            float avgWheelRad = 0.0f;
+            int countDrivingWheels = 0;
+            foreach (Wheel wheel in wheels)
+            {
+                if (!wheel.m_wheelProperties.m_isConnectedToDriveTrain)
+                    continue;
+                avgWheelRad += wheel.m_wheelProperties.m_wheelRadius;
+                ++countDrivingWheels;
+            }
+            avgWheelRad /= countDrivingWheels;
+            return avgWheelRad;
+
+        }
+        private static float AverageDrivingWheelLinearSpeedToDriveShaftRotationSpeed(float speed, float wheelRad, float differentialGearRatio)
+        {
+            float drivingAxleRPMThres = speed / (2 * wheelRad * Mathf.PI);
+            return drivingAxleRPMThres * differentialGearRatio;
+        }
+        #endregion
+
+
+        #region Vehicle
+        public static void AutoConfigATGearSettings(
+            ref VehicleProperties vehicleProperty)
+        {
+            if (vehicleProperty.m_gearBoxProperties.m_gears.Count <= 0)
+            {
+                return;
+            }
+
+            float gearUpRPM = vehicleProperty.m_engineProperty.m_engineMaxRPM * vehicleProperty.m_gearBoxProperties.m_ATGearUpRPMScale;
+            float targetRPM = vehicleProperty.m_engineProperty.m_engineMaxRPM * vehicleProperty.m_gearBoxProperties.m_ATGearDownTargetRPMScale;
+
+            DrivingGear gear1 = vehicleProperty.m_gearBoxProperties.m_gears[0];
+            gear1.m_ATGearUpRPM = gearUpRPM;
+            gear1.m_ATGearDownRPM = -10000;
+
+            for (int iGear = 1; iGear < vehicleProperty.m_gearBoxProperties.m_gears.Count; ++iGear)
+            {
+                DrivingGear prevGear = vehicleProperty.m_gearBoxProperties.m_gears[iGear - 1];
+                DrivingGear curGear = vehicleProperty.m_gearBoxProperties.m_gears[iGear];
+
+                float gearRatioScale = prevGear.m_gearRatio / curGear.m_gearRatio;
+                float safeTargetRPM = Mathf.Min(vehicleProperty.m_engineProperty.m_engineMaxRPM, targetRPM);
+                float gearDownRPM = safeTargetRPM / gearRatioScale;
+
+                curGear.m_ATGearUpRPM = gearUpRPM;
+                curGear.m_ATGearDownRPM = gearDownRPM;
+            }
+        }
+
+        public static DrivingGear GetCurrentGear(
+            in VehicleProperties vehicleProperty, in VehicleState vehicleState)
+        {
+            int idxGear = vehicleState.m_idxCurrentGear;
+            if (idxGear >= 0)
+            {
+                if(idxGear < vehicleProperty.m_gearBoxProperties.m_gears.Count)
+                {
+                    return vehicleProperty.m_gearBoxProperties.m_gears[idxGear];
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                return vehicleProperty.m_gearBoxProperties.m_reverseGear;
+            }
+        }
+
+        public static bool GetCurrentGearIsReverseGear(in VehicleState vehicleState)
+        {
+            return vehicleState.m_idxCurrentGear < 0;
+        }
+
+        public static float GetCurrentGearBoxGearRatio(
+            in VehicleProperties vehicleProperty, in VehicleState vehicleState)
+        {
+            DrivingGear gear = GetCurrentGear(vehicleProperty, vehicleState);
+            bool isReverse = GetCurrentGearIsReverseGear(vehicleState);
+            float gearRatio = isReverse ? -1.0f: 1.0f;
+            if (gear != null)
+            {
+                gearRatio *= gear.m_gearRatio;
+            }
+            return gearRatio;
+        }
+
+        public static float GetCurrentGearRatio(
+            in VehicleProperties vehicleProperty, in VehicleState vehicleState)
+        {
+            float gearRatio = GetCurrentGearBoxGearRatio(vehicleProperty, vehicleState);
+            gearRatio *= vehicleProperty.m_differentialGearRatio;
+            return gearRatio;
+        }
+
+        public static bool IsInForwardGear(in VehicleState vehicleState) 
+        { 
+            return vehicleState.m_idxCurrentGear >= 0; 
+        }
+        public static bool IsInReverseGear(in VehicleState vehicleState) 
+        { 
+            return vehicleState.m_idxCurrentGear < 0; 
+        }
+
+        public static float GetVehicleSpeed(in List<Wheel> wheels)
+        {
+            // Using non-driving wheels avg speed as vehicle speed
+            int countNonDrivingWheels = 0;
+            float avgAngularVelocityNonDriving = 0.0f;
+            float avgRadiusNonDriving = 0.0f;
+            foreach (Wheel wheel in wheels)
+            {
+                if (!wheel.m_wheelProperties.m_isConnectedToDriveTrain)
+                {
+                    ++countNonDrivingWheels;
+                    avgAngularVelocityNonDriving += wheel.m_wheelState.m_currentAngularVelocity;
+                    avgRadiusNonDriving += wheel.m_wheelProperties.m_wheelRadius;
+                }
+            }
+
+            avgAngularVelocityNonDriving /= countNonDrivingWheels;
+            avgRadiusNonDriving /= countNonDrivingWheels;
+            float vehicleSpeed = avgAngularVelocityNonDriving * avgRadiusNonDriving;
+            return vehicleSpeed;
+        }
+
+        private static bool CanShiftToReverse(
+            in VehicleProperties vehicleProperty,
+            in VehicleState vehicleState)
+        {
+            float limit = AverageDrivingWheelLinearSpeedToDriveShaftRotationSpeed(
+                vehicleProperty.m_gearBoxProperties.m_forwardToReverseSpeedThreshold,
+                vehicleProperty.m_avgDrivingWheelRad,
+                vehicleProperty.m_differentialGearRatio);
+            return vehicleState.m_idxCurrentGear == 0 && vehicleState.m_driveOutputShaftRotationSpeed < limit;
+        }
+
+        private static bool CanShiftToForward(
+            in VehicleProperties vehicleProperty,
+            in VehicleState vehicleState)
+        {
+            float limit = AverageDrivingWheelLinearSpeedToDriveShaftRotationSpeed(
+                vehicleProperty.m_gearBoxProperties.m_reverseToForwardSpeedThreshold,
+                vehicleProperty.m_avgDrivingWheelRad,
+                vehicleProperty.m_differentialGearRatio);
+            return vehicleState.m_idxCurrentGear == -1 && vehicleState.m_driveOutputShaftRotationSpeed > -limit;
+        }
+
+        private static void ChangeGear(
+            int gearChange,
+            in VehicleProperties vehicleProperty,
+            ref VehicleState vehicleState)
+        {
+            if (gearChange == 0)
+            {
+                return;
+            }
+
+            int maxGear = vehicleProperty.m_gearBoxProperties.m_gears.Count - 1;
+            int newGear = math.clamp(vehicleState.m_idxCurrentGear + gearChange, -1, maxGear);
+
+            // Shift to reverse gear
+            if (vehicleState.m_idxCurrentGear == 0 && newGear == -1)
+            {
+                // Forward speed is too high to shift into reverse gear
+                if (!CanShiftToReverse(vehicleProperty, vehicleState))
+                {
+                    newGear = 0;
+                }
+            }
+            // Shift to forward gear
+            else if (vehicleState.m_idxCurrentGear == -1 && newGear == 1)
+            {
+                // Reverse speed is too high to shift into forward gear
+                if (!CanShiftToForward(vehicleProperty, vehicleState))
+                {
+                    newGear = -1;
+                }
+            }
+
+            vehicleState.m_idxCurrentGear = newGear;
+        }
+
+        private static void ConsumeManualGearChange(
+            ref VehicleContext vehicleContext,
+            in VehicleProperties vehicleProperty,
+            ref VehicleState vehicleState)
+        {
+            int gearChange = vehicleContext.m_inputs.m_gearChange;
+
+            ChangeGear(gearChange, vehicleProperty, ref vehicleState);
+
+            vehicleContext.m_inputs.m_gearChange = 0;
+        }
+
+        private static void CalculateATChangeForwardGear(
+            in VehicleProperties vehicleProperty,
+            ref VehicleState vehicleState)
+        {
+            DrivingGear curGear = GetCurrentGear(vehicleProperty, vehicleState);
+            if (vehicleState.m_engineRPM >= curGear.m_ATGearUpRPM)
+            {
+                ChangeGear(1, vehicleProperty, ref vehicleState);
+                DrivingGear newCurGear = GetCurrentGear(vehicleProperty, vehicleState);
+                //Debug.Log($"AT Shift Up: {curGear.m_gearName}->{newCurGear.m_gearName} at RPM: {vehicleState.m_engineRPM}");
+            }
+            else if (vehicleState.m_engineRPM <= curGear.m_ATGearDownRPM)
+            {
+                ChangeGear(-1, vehicleProperty, ref vehicleState);
+                DrivingGear newCurGear = GetCurrentGear(vehicleProperty, vehicleState);
+                //Debug.Log($"AT Shift Down: {curGear.m_gearName}->{newCurGear.m_gearName} at RPM: {vehicleState.m_engineRPM}");
+            }
+        }
+
+        private static void CalculateATSwitchForwardReverse(
+            in VehicleContext vehicleContext,
+            in VehicleProperties vehicleProperty,
+            ref VehicleState vehicleState)
+        {
+            if (IsInForwardGear(vehicleState))
+            {
+                if (vehicleContext.m_inputs.m_throttleIntention < 0 && CanShiftToReverse(vehicleProperty, vehicleState))
+                {
+                    ChangeGear(-1, vehicleProperty, ref vehicleState);
+                }
+                else
+                {
+                    CalculateATChangeForwardGear(vehicleProperty, ref vehicleState);
+                }
+            }
+            //TODO: 实现空挡时这里需要加空挡
+            else if (IsInReverseGear(vehicleState))
+            {
+                if (vehicleContext.m_inputs.m_throttleIntention > 0 && CanShiftToForward(vehicleProperty, vehicleState))
+                {
+                    ChangeGear(1, vehicleProperty, ref vehicleState);
+                }
+            }
+        }
+
+        private static bool ShouldRevLimiterEngage(in VehicleProperties vehicleProperty, in VehicleState vehicleState)
+        {
+            return vehicleState.m_engineRPM > vehicleProperty.m_engineProperty.m_engineMaxRPM;
+        }
+
+        private static bool ShouldSpeedLimiterEngage(in VehicleProperties vehicleProperty, in VehicleState vehicleState)
+        {
+            bool shouldEngage = false;
+            if (vehicleProperty.m_engineProperty.m_forwardSpeedLimit >= 0)
+            {
+                shouldEngage |= vehicleState.m_measuredVehicleSpeed > vehicleProperty.m_engineProperty.m_forwardSpeedLimit;
+            }
+            if (vehicleProperty.m_engineProperty.m_backwardSpeedLimit >= 0)
+            {
+                shouldEngage |= vehicleState.m_measuredVehicleSpeed < -vehicleProperty.m_engineProperty.m_backwardSpeedLimit;
+            }
+            return shouldEngage;
+        }
+
+        private static void CalculateLimiterState(
+            float deltaTime, in VehicleProperties vehicleProperty, ref VehicleState vehicleState)
+        {
+            if (!vehicleState.m_limiterEngaged)
+            {
+                if (ShouldRevLimiterEngage(vehicleProperty, vehicleState) || 
+                    ShouldSpeedLimiterEngage(vehicleProperty, vehicleState))
+                {
+                    vehicleState.m_limitEngageTimer += deltaTime;
+                    if (vehicleState.m_limitEngageTimer >= vehicleProperty.m_engineProperty.m_limiterReactionTime)
+                    {
+                        vehicleState.m_limiterEngaged = true;
+                        vehicleState.m_limitEngageTimer = 0.0f;
+                    }
+                }
+                else
+                {
+                    vehicleState.m_limitEngageTimer = 0.0f;
+                }
+            }
+            else
+            {
+                if (! ShouldRevLimiterEngage(vehicleProperty, vehicleState) && 
+                    !ShouldSpeedLimiterEngage(vehicleProperty, vehicleState))
+                {
+                    vehicleState.m_limitEngageTimer += deltaTime;
+                    if (vehicleState.m_limitEngageTimer >= vehicleProperty.m_engineProperty.m_limiterReactionTime)
+                    {
+                        vehicleState.m_limiterEngaged = false;
+                        vehicleState.m_limitEngageTimer = 0.0f;
+                    }
+                }
+                else
+                {
+                    vehicleState.m_limitEngageTimer = 0.0f;
+                }
+            }
+        }
+
+        public static void InitVehicleState(
+            ref VehicleProperties vehicleProperty,
+            in List<Wheel> wheels,
+            ref VehicleState vehicleState)
+        {
+            vehicleProperty.m_avgDrivingWheelRad = GetAverageDrivingWheelRad(wheels);
+        }
+
+        public static void UpdateVehicleInternalStates(
+            float deltaTime,
+            ref VehicleContext vehicleContext,
+            in VehicleProperties vehicleProperty, 
+            in List<Wheel> wheels,
+            ref VehicleState vehicleState)
+        {
+            //TODO: 当轴和引擎断开时，单独计算引擎本身的情况(m_bClutchEngaged需要处理)
+
+            // Calculate Engine State and Drive Train State
+            int wheelCount = wheels.Count;
+
+            //TODO: 引入轴，轴和轴可以通过differential链接
+            //Conventional Differential: Drive Shaft Speed = Avg Wheel Speed
+            float combinedAngularVelocity = 0.0f;
+            int countDrivingWheels = 0;
+            foreach (Wheel wheel in wheels)
+            {
+                if(!wheel.m_wheelProperties.m_isConnectedToDriveTrain)
+                {
+                    continue;
+                }
+
+                ++countDrivingWheels;
+                combinedAngularVelocity += wheel.m_wheelState.m_currentAngularVelocity;
+            }
+
+            float engineIdleAngularVelocity = RPMToAngularV(vehicleProperty.m_engineProperty.m_engineIdleRPM);
+
+            if (countDrivingWheels != 0)
+            {
+
+                //TODO: 目前先走从驱动轮倒推的EngineRPM
+                float diffCarrierRotationSpeed = combinedAngularVelocity / countDrivingWheels;
+                vehicleState.m_driveOutputShaftRotationSpeed = diffCarrierRotationSpeed * vehicleProperty.m_differentialGearRatio;
+                float gearRatio = GetCurrentGearBoxGearRatio(vehicleProperty, vehicleState);
+                vehicleState.m_driveInputShaftRotationSpeed = vehicleState.m_driveOutputShaftRotationSpeed * gearRatio;
+
+                float engineAngularVelocity = 0.0f;
+                if (vehicleState.m_bClutchEngaged)
+                {
+                    engineAngularVelocity = vehicleState.m_driveInputShaftRotationSpeed;
+                }
+                else
+                {
+                    // TODO: 给Clutch disengage一个曲线，而非用01描述这个过程
+                    float deltaEngineRotSpeed = vehicleState.m_engineOutputTorque / vehicleProperty.m_engineProperty.m_engineInertia * deltaTime;
+                    engineAngularVelocity += deltaEngineRotSpeed;
+                }
+
+                //Debug.Log($"engineRPM {AngularVToRPM(engineAngularVelocity)}");
+
+                engineAngularVelocity = MathF.Max(engineAngularVelocity, engineIdleAngularVelocity);
+
+                vehicleState.m_engineAngularVelocity = engineAngularVelocity;
+            }
+            else
+            {
+                //TODO: 当轴和引擎断开时，单独计算引擎本身的情况
+            }
+            vehicleState.m_engineRPM = AngularVToRPM(vehicleState.m_engineAngularVelocity);
+            vehicleState.m_measuredVehicleSpeed = GetVehicleSpeed(wheels);
+
+            // Change Gear
+            if (vehicleProperty.m_gearBoxProperties.m_transmissionSystemType == TransmissionSystemType.ManualTransmission)
+            {
+                ConsumeManualGearChange(ref vehicleContext, vehicleProperty, ref vehicleState);
+            }
+            else
+            {
+                CalculateATSwitchForwardReverse(vehicleContext, vehicleProperty, ref vehicleState);
+            }
+
+            //Calculate limiter (revolve limiter and speed limiter)
+            CalculateLimiterState(deltaTime, vehicleProperty, ref vehicleState);
+
+            //Calculate Torque
+            float sampledTorque = 0.0f;
+            if(vehicleProperty.m_engineProperty.m_torqueCurve)
+            {
+                sampledTorque = vehicleProperty.m_engineProperty.m_torqueCurve.Evaluate(vehicleState.m_engineRPM);
+            }
+
+            if (!vehicleState.m_limiterEngaged)
+            {
+                vehicleState.m_engineOutputTorque = sampledTorque;
+                vehicleState.m_engineOutputTorque *= Mathf.Abs(vehicleContext.m_inputs.m_throttle);
+            }
+            else
+            {
+                // Rev limiter
+                float overRedlineRPM = Mathf.Max(vehicleState.m_engineRPM - vehicleProperty.m_engineProperty.m_engineMaxRPM, 0.0f);
+                float sampledRedlineTorque = 0.0f;
+                if (vehicleProperty.m_engineProperty.m_revLimiterEngagedRPMToTorqueCurve)
+                {
+                    sampledRedlineTorque = vehicleProperty.m_engineProperty.m_revLimiterEngagedRPMToTorqueCurve.Evaluate(overRedlineRPM);
+                }
+                
+                // Speed limiter
+                float overForwardLimitSpeed = Mathf.Max(vehicleState.m_measuredVehicleSpeed - vehicleProperty.m_engineProperty.m_forwardSpeedLimit, 0.0f);
+                float overBackwardLimitSpeed = Mathf.Max(vehicleProperty.m_engineProperty.m_backwardSpeedLimit - vehicleState.m_measuredVehicleSpeed, 0.0f);
+                float overLimitSpeed = Mathf.Max(overForwardLimitSpeed, overBackwardLimitSpeed);
+                float sampledSpeedLimitTorque = 0.0f;
+                if (vehicleProperty.m_engineProperty.m_speedLimiterEngagedSpeedToTorqueCurve)
+                {
+                    sampledSpeedLimitTorque = vehicleProperty.m_engineProperty.m_speedLimiterEngagedSpeedToTorqueCurve.Evaluate(overLimitSpeed);
+                }
+
+                float resistenceTorque = Mathf.Max(sampledRedlineTorque, sampledSpeedLimitTorque);
+
+
+                vehicleState.m_engineOutputTorque = -resistenceTorque;
+            }
+
+            float loadTorque = vehicleProperty.m_engineProperty.m_engineInternalLoadTorque;
+            float maxLoadTorque = Mathf.Max(0.0f, vehicleState.m_engineAngularVelocity - engineIdleAngularVelocity) * vehicleProperty.m_engineProperty.m_engineInertia / deltaTime;
+            loadTorque = Mathf.Min(maxLoadTorque, loadTorque);
+
+            vehicleState.m_engineNetOutputTorque = vehicleState.m_engineOutputTorque - loadTorque;
+        }
+
+        public static void UpdateWheelStatesFromVehicle(
+            float deltaTime,
+            in VehicleContext vehicleContext,
+            in VehicleProperties vehicleProperty,
+            in VehicleState vehicleState,
+            List<Wheel> wheels)
+        {
+            //TODO: 引入轴的概念，用轴来计算每个轮胎的torque输入
+            int countDrivingWheels = 0;
+            foreach (Wheel wheel in wheels)
+            {
+                WheelState wheelState = wheel.m_wheelState;
+                WheelProperties wheelProperty = wheel.m_wheelProperties;
+
+                if (wheelProperty.m_isSteerable)
+                {
+                    wheelState.m_currentSteerAngle = vehicleContext.m_inputs.m_steering * wheelProperty.m_allowedAngle;
+                }
+                else
+                {
+                    wheelState.m_currentSteerAngle = 0;
+                }
+
+                if (wheelProperty.m_isConnectedToDriveTrain)
+                {
+                    ++countDrivingWheels;
+                }
+                else
+                {
+                    wheelState.m_currentTorque = 0.0f;
+                }
+
+                if (wheelProperty.m_allowHandbrake && vehicleContext.m_inputs.m_handbrake)
+                {
+                    wheelState.m_currentBrakeTorque = wheelProperty.m_handbrakeTorque;
+                }
+                else
+                {
+                    wheelState.m_currentBrakeTorque = wheelProperty.m_brakeTorque * vehicleContext.m_inputs.m_brake;
+                }
+            }
+
+            float gearRatio = GetCurrentGearRatio(vehicleProperty, vehicleState);
+
+            //TODO: Currently using open differential. Consider other types of differential
+            float wheelTorque = vehicleState.m_engineNetOutputTorque * gearRatio / countDrivingWheels;
+            foreach (Wheel wheel in wheels)
+            {
+                WheelState wheelState = wheel.m_wheelState;
+                WheelProperties wheelProperty = wheel.m_wheelProperties;
+
+                if (wheelProperty.m_isConnectedToDriveTrain)
+                {
+                    wheelState.m_currentTorque = wheelTorque;
+                }
+            }
         }
         #endregion
 
@@ -102,11 +602,16 @@ namespace B3DVehicle
             return Box3DWorld.Instance.Query_CastRayClosest(rayStart, rayDir * suspensionState.m_maxDistanceToGround, layerMaskNoVehicle, out hit);
         }
 
-        public static void InitSuspensionState(
-            in SuspensionProperties suspensionProperties,
-            ref SuspensionState suspensionState)
+        public static void InitSuspension(
+            in VehicleState vehicleState,
+            ref Suspension suspension)
         {
-
+            Box3DBody b3dBody = vehicleState.m_b3dBody;
+            Transform bodyTransform = b3dBody.transform;
+            suspension.m_suspensionProperties.m_posConnection_vehicle_ls =
+                bodyTransform.InverseTransformPoint(suspension.transform.position);
+            suspension.m_suspensionProperties.m_suspensionDirection_vehicle_ls =
+                bodyTransform.InverseTransformDirection(suspension.transform.up);
         }
 
         public static void UpdateSuspensionState(
@@ -432,23 +937,35 @@ namespace B3DVehicle
         public static void UpdateWheelSubstep(
             in Vector3 deltaPosition, in Quaternion deltaRotation,
             float subStepDeltaTime,
-            in VehicleContext context,
-            int wheelCount, int iterCount,
+            in VehicleContext context, in VehicleProperties vehicleProperty,
+            int iterCount,
             in List<Suspension> suspensions,
             in List<Wheel> wheels,
             ref VehicleState vehicleState)
         {
+            int wheelCount = wheels.Count;
+
             // Initialize for iterations
             for (int i = 0; i < wheelCount; ++i)
             {
-                // Spin the wheel
+                // Rotate the wheel (With drive and brake)
                 WheelState wheelState = wheels[i].m_wheelState;
                 WheelProperties wheelProperty = wheels[i].m_wheelProperties;
                 SuspensionState suspensionState = suspensions[i].m_suspensionState;
 
-                //Update wheel torque
-                float angularImpulse = wheelState.m_currentTorque * subStepDeltaTime;
-                wheelState.m_transitional.m_angularVelocity += angularImpulse / wheelProperty.m_inertia;
+                float angularImpulseDrive = wheelState.m_currentTorque * subStepDeltaTime;
+                float angularImpulseBrake = Mathf.Abs(wheelState.m_currentBrakeTorque) * subStepDeltaTime;
+                float angularImpulseDrag = Mathf.Abs(wheelProperty.m_dragTorque) * subStepDeltaTime;
+
+                float deltaAngularDriveImpulse = angularImpulseDrive / wheelProperty.m_inertia;
+                float deltaAngularBrakeImpulse = angularImpulseBrake / wheelProperty.m_inertia;
+                float deltaAngularDragImpulse = angularImpulseDrag / wheelProperty.m_inertia;
+                float deltaAngularResistenceImpulse = deltaAngularBrakeImpulse + deltaAngularDragImpulse;
+
+                wheelState.m_transitional.m_angularVelocity += deltaAngularDriveImpulse;
+
+                deltaAngularResistenceImpulse = Mathf.Min(deltaAngularResistenceImpulse, Mathf.Abs(wheelState.m_transitional.m_angularVelocity));
+                wheelState.m_transitional.m_angularVelocity -= Mathf.Sign(wheelState.m_transitional.m_angularVelocity) * deltaAngularResistenceImpulse; ;
 
                 wheelState.m_transitional.m_substepAccumImpulse = Vector2.zero;
 

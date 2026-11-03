@@ -15,10 +15,10 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     public VehicleProperties m_vehicleProperties;
 
     [SerializeField, ReadOnly]
-    private VehicleState m_vehicleState = new VehicleState();
+    public VehicleState m_vehicleState = new VehicleState();
 
     [SerializeField, ReadOnly]
-    private VehicleContext m_vehicleContext = new VehicleContext();
+    public VehicleContext m_vehicleContext = new VehicleContext();
 
     // Vehicle Properties
     //TODO: may be added into VehicleProperties later
@@ -37,15 +37,14 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     public NormalizedCurveAsset m_gasInputCurve;
 
     [Header("Steering")]
-    public float m_maxSteerAngle = 30.0f;
     public NormalizedCurveAsset m_steeringInputCurve;
 
-    [Header("Engine")]
-    public float m_testEngineTorque = 1000.0f;
-
     // Input States
-    private float throttleInput;
-    private float steeringInput;
+    private float m_throttleInput = 0f;
+    private bool m_brakeInput = false;
+    private bool m_handbrakeInput = false;
+    private float m_steeringInput = 0f;
+    private int m_gearChangeInput = 0;
 
     private System.Random m_random = new System.Random();
 
@@ -66,13 +65,18 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         Box3DWorld.UnregisterFixedUpdate(this);
     }
 
+    private void OnValidate()
+    {
+        VehiclePhysics.AutoConfigATGearSettings(ref m_vehicleProperties);
+    }
+
     // Start is called before the first frame update
     void Start()
     {
         m_b3dBody = GetComponent<Box3DBody>();
         m_vehicleState.m_b3dBody = m_b3dBody;
 
-        m_suspensions = GetComponentsInChildren<Suspension>().ToList();
+        GatherSuspensions(transform, m_suspensions);
         m_wheels.Capacity = m_suspensions.Count;
         foreach (Suspension suspension in m_suspensions)
         {
@@ -117,97 +121,92 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
 
     private void CacheInputs()
     {
-        throttleInput = UnityEngine.Input.GetAxis("Vertical");
-        steeringInput = UnityEngine.Input.GetAxis("Horizontal");
-        //braking = Input.GetKey(KeyCode.Space);
-        //if (Input.GetButtonDown("Gear Up"))
-        //{
-        //    gearChange += 1;
-        //}
-        //if (Input.GetButtonDown("Gear Down"))
-        //{
-        //    gearChange -= 1;
-        //}
+        m_throttleInput = UnityEngine.Input.GetAxis("Vertical");
+        m_steeringInput = UnityEngine.Input.GetAxis("Horizontal");
+        m_brakeInput = UnityEngine.Input.GetAxis("Brake") > 0;
+        m_handbrakeInput = UnityEngine.Input.GetAxis("Handbrake") > 0;
+        if (UnityEngine.Input.GetButtonDown("Gear Up"))
+        {
+            m_gearChangeInput += 1;
+        }
+        if (UnityEngine.Input.GetButtonDown("Gear Down"))
+        {
+            m_gearChangeInput -= 1;
+        }
     }
 
     private void CalculateInputState()
     {
         VehicleInputs inputs = m_vehicleContext.m_inputs;
-        inputs.m_throttle = throttleInput;
-        //brake = 0.0f;
-        inputs.m_steering = m_debugUseLockedSteering ? Mathf.Clamp(m_debugLockedSteering, -1f, 1f) : steeringInput;
+
+        float steering = m_debugUseLockedSteering ? Mathf.Clamp(m_debugLockedSteering, -1f, 1f) : m_steeringInput;
+        if(m_steeringInputCurve) //TODO: 这个不应该在Vehicle上，应该在一个统一的Input Manager里面
+        {
+            steering = MathF.Sign(steering) * MathF.Max(0.0f, m_steeringInputCurve.Evaluate(MathF.Abs(steering)));
+        }
+        inputs.m_steering = steering;
+
+        float throttle = m_throttleInput;
+        float brake = 0.0f;
 
         // Remap throttle
         if (m_gasInputCurve)
         {
-            inputs.m_throttle = Mathf.Sign(throttleInput) * m_gasInputCurve.Evaluate(Mathf.Abs(throttleInput));
+            inputs.m_throttle = m_gasInputCurve.Evaluate(Mathf.Abs(m_throttleInput));
         }
 
-        //if (IsInForwardGear)
-        //{
-        //    // When in forward gear, reverse throttle input means applying brake. 
-        //    if (throttle < 0)
-        //    {
-        //        brake = Mathf.Abs(throttle);
-        //        throttle = 0;
-        //    }
-        //}
-        ////TODO: 之后空挡需要处理
-        //else if (IsInReverseGear)
-        //{
-        //    // When in reverse gear, forward throttle input means applying brake. 
-        //    if (throttle > 0)
-        //    {
-        //        brake = Mathf.Abs(throttle);
-        //        throttle = 0;
-        //    }
-        //}
+        if (VehiclePhysics.IsInForwardGear(m_vehicleState))
+        {
+            // When in forward gear, reverse throttle input means applying brake. 
+            if (throttle < 0)
+            {
+                brake = Mathf.Abs(throttle);
+                throttle = 0;
+            }
+        }
+        //TODO: 之后空挡需要处理
+        else if (VehiclePhysics.IsInReverseGear(m_vehicleState))
+        {
+            // When in reverse gear, forward throttle input means applying brake. 
+            if (throttle > 0)
+            {
+                brake = Mathf.Abs(throttle);
+                throttle = 0;
+            }
+        }
 
-        //// Nothing to remap with steering for now
+        inputs.m_throttle = throttle;
+        inputs.m_throttleIntention = m_throttleInput;
 
-        //// Remap braking
-        //if (braking)
-        //{
-        //    brake = 1.0f;
-        //}
+        // Nothing to remap with steering for now
+
+        // Remap braking
+        if (m_brakeInput)
+        {
+            brake = 1.0f;
+        }
+
+        inputs.m_brake = brake;
+        inputs.m_handbrake = m_handbrakeInput;
+
+        inputs.m_gearChange = m_gearChangeInput;
+        m_gearChangeInput = 0;
+    }
+
+    private void GatherSuspensions(Transform node, List<Suspension> suspensions)
+    {
+        suspensions.AddRange(node.GetComponents<Suspension>());
+
+        for (int i = 0; i < node.childCount; i++)
+        {
+            GatherSuspensions(node.GetChild(i), suspensions);
+        }
     }
 
     private void DevideTorqueBetweenWheels(float torque, out float torqueA, out float torqueB)
     {
         //TODO: 目前仅使用开放差速器，之后支持限滑差速器。
         torqueA = torqueB = torque * 0.5f;
-    }
-
-    private void ApplyDrive()
-    {
-        //float differentialTorque = m_driveOutputShaftTorque * m_driveShaftToDriveAxleGearRatio;
-        float differentialTorque = m_testEngineTorque * m_vehicleContext.m_inputs.m_throttle;
-
-        float torqueL = 0.0f;
-        float torqueR = 0.0f;
-        DevideTorqueBetweenWheels(differentialTorque, out torqueL, out torqueR);
-
-        // Rear-wheel drive
-        m_wheelRL.m_wheelState.m_currentTorque = torqueL;
-        m_wheelRR.m_wheelState.m_currentTorque = torqueR;
-
-        // Front wheels do not drive
-        m_wheelFL.m_wheelState.m_currentTorque = 0f;
-        m_wheelFR.m_wheelState.m_currentTorque = 0f;
-    }
-
-    private void ApplySteering(float steeringInput)
-    {
-        float steeringVal = steeringInput;
-        if (m_steeringInputCurve)
-        {
-            steeringVal = m_steeringInputCurve.Evaluate(steeringInput);
-        }
-        float steerAngle = steeringVal * m_maxSteerAngle;
-
-        //TODO: 实现steering平滑
-        m_wheelFL.m_wheelState.m_currentSteerAngle = steerAngle;
-        m_wheelFR.m_wheelState.m_currentSteerAngle = steerAngle;
     }
 
     private void UpdateVehiclePhysics_SuspensionStates()
@@ -258,6 +257,13 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
 
     private void UpdateVehiclePhysics_FixedUpdate()
     {
+        // Update wheel driving states
+        VehiclePhysics.UpdateWheelStatesFromVehicle(Time.fixedDeltaTime,
+            m_vehicleContext,
+            m_vehicleProperties,
+            m_vehicleState,
+            m_wheels);
+
         // Update wheel state with new inputs
         UpdateVehiclePhysics_WheelStates();
 
@@ -267,10 +273,13 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
 
     public void InitVehiclePhysics()
     {
-        foreach (Suspension suspension in m_suspensions)
+        for (int i = 0; i < m_suspensions.Count; ++i)
         {
-            VehiclePhysics.InitSuspensionState(suspension.m_suspensionProperties, ref suspension.m_suspensionState);
+            Suspension suspension = m_suspensions[i];
+            VehiclePhysics.InitSuspension(m_vehicleState, ref suspension);
         }
+
+        VehiclePhysics.InitVehicleState(ref m_vehicleProperties, m_wheels, ref m_vehicleState);
 
         UpdateVehiclePhysics_SuspensionStates();
         UpdateVehiclePhysics_WheelStates();
@@ -338,7 +347,8 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         VehiclePhysics.UpdateWheelSubstep(
                     in deltaPosition, in deltaRotation,
                     subStepDeltaTime,
-                    m_vehicleContext, 4, countIterWheel,
+                    m_vehicleContext, m_vehicleProperties,
+                    countIterWheel,
                     m_suspensions,
                     m_wheels,
                     ref m_vehicleState);
@@ -363,13 +373,17 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
 
         UpdateVehiclePhysics_SuspensionStates();
         UpdateVehiclePhysics_WheelStates();
+
+        VehiclePhysics.UpdateVehicleInternalStates(Time.fixedDeltaTime,
+            ref m_vehicleContext,
+            m_vehicleProperties,
+            m_wheels,
+            ref m_vehicleState);
     }
 
     void FixedUpdate()
     {
         CalculateInputState();
-        ApplySteering(m_vehicleContext.m_inputs.m_steering);
-        ApplyDrive();
 
         m_vehicleContext.m_surfaceFrictionCoeff = 1.0f;
 

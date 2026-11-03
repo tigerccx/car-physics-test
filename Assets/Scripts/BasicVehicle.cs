@@ -107,7 +107,7 @@ public class BasicVehicle : MonoBehaviour
         get => AverageDrivingWheelLinearSpeedToDriveShaftRotationSpeed(m_reverseToForwardSpeedThreshold);
     }
 
-    [Header("Break")]
+    [Header("Brake")]
     public NormalizedCurveAsset m_brakeTorqueCurve;
 
     [Header("Driving")]
