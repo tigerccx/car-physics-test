@@ -14,7 +14,7 @@ namespace B3DVehicle
 {
     public class VehiclePhysics
     {
-        static float EPS = 1e-6f;
+        public static float EPS = 1e-6f;
         static float RPM_TO_AV = Mathf.PI / 30.0f;
         static float AV_TO_RPM = 1.0f / RPM_TO_AV;
 
@@ -532,10 +532,12 @@ namespace B3DVehicle
                 if (wheelProperty.m_allowHandbrake && vehicleContext.m_inputs.m_handbrake)
                 {
                     wheelState.m_currentBrakeTorque = wheelProperty.m_handbrakeTorque;
+                    wheelState.m_brakeType = WheelBrakeType.HandBrake;
                 }
                 else
                 {
                     wheelState.m_currentBrakeTorque = wheelProperty.m_brakeTorque * vehicleContext.m_inputs.m_brake;
+                    wheelState.m_brakeType = WheelBrakeType.Brake;
                 }
             }
 
@@ -723,6 +725,12 @@ namespace B3DVehicle
             wheelState.m_transitional.m_accumAvailableGripImpulse = 0.0f;
             wheelState.m_transitional.m_accumGeneratedLateralImpulse = 0.0f;
             wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse = 0.0f;
+
+            wheelState.m_transitional.m_ABSEngaged = false;
+            wheelState.m_transitional.m_accumBrakeTorque = 0.0f;
+            
+            
+            wheelState.m_transitional.m_subStepCount = 0;
         }
 
         private static void IntegrateWheelTransitionalStates(in WheelProperties wheelProperties, ref WheelState wheelState)
@@ -736,6 +744,11 @@ namespace B3DVehicle
             wheelState.m_currentLongitudinalImpulse = wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse;
 
             wheelState.m_currentAngularVelocity = wheelState.m_transitional.m_angularVelocity;
+            
+            wheelState.m_currentAngularVelocity = wheelState.m_transitional.m_angularVelocity;
+
+            wheelState.m_isABSEngaged = wheelState.m_transitional.m_ABSEngaged;
+            wheelState.m_currentBrakeTorque = wheelState.m_transitional.m_accumBrakeTorque / wheelState.m_transitional.m_subStepCount;
         }
 
         private static void UpdateWheelEffectiveMassAtContact(
@@ -812,7 +825,40 @@ namespace B3DVehicle
             InitWheelTransitionalStates(ref wheelState);
         }
 
+        private static float CalculateABSBrakeTorque(
+            in VehicleProperties vehicleProperties,
+            in WheelProperties wheelProperty,
+            ref WheelState wheelState,
+            float brakeTorque)
+        {
+            float currentSlipRatio = wheelState.m_transitional.m_slipRatio;
+            float diffSlipRatio = -vehicleProperties.m_ABSOptimalSlipRatio - currentSlipRatio;
+
+            if (diffSlipRatio < 0f)
+            // Wheel faster than optimal slip ratio -> ABS disengage
+            {
+                wheelState.m_transitional.m_ABSEngaged |= false;
+                return brakeTorque;
+            }
+            else
+            // Wheel slower than optimal slip ratio
+            {
+                wheelState.m_transitional.m_ABSEngaged |= true;
+
+                float newBrakeTorque = 0.0f;
+                if (vehicleProperties.m_ABSSlipToTorqueScaleCurve)
+                {
+                    float scale = vehicleProperties.m_ABSSlipToTorqueScaleCurve.Evaluate(diffSlipRatio);
+                    scale = Mathf.Clamp01(scale);
+                    newBrakeTorque = brakeTorque * scale;
+                }
+
+                return newBrakeTorque;
+            }
+        }
+
         private static void CalculateWheelTransitionalVelocityStates(
+            float deltaTime,
             in WheelProperties wheelProperty,
             in VehicleState vehicleState,
             ref WheelState wheelState)
@@ -956,14 +1002,34 @@ namespace B3DVehicle
                 WheelProperties wheelProperty = wheels[i].m_wheelProperties;
                 SuspensionState suspensionState = suspensions[i].m_suspensionState;
 
+                wheelState.m_transitional.m_subStepCount += 1;
+
+                float brakeTorque = wheelState.m_currentBrakeTorque;
+
+                if (brakeTorque > EPS && vehicleProperty.m_enableABS && wheelState.m_isGrounded)
+                {
+                    CalculateWheelTransitionalVelocityStates(
+                        subStepDeltaTime, wheelProperty, vehicleState, ref wheelState);
+
+                    brakeTorque = CalculateABSBrakeTorque(vehicleProperty, wheelProperty, ref wheelState, brakeTorque);
+                }
+                wheelState.m_transitional.m_accumBrakeTorque += brakeTorque;
+
                 float angularImpulseDrive = wheelState.m_currentTorque * subStepDeltaTime;
-                float angularImpulseBrake = Mathf.Abs(wheelState.m_currentBrakeTorque) * subStepDeltaTime;
-                float angularImpulseDrag = Mathf.Abs(wheelProperty.m_dragTorque) * subStepDeltaTime;
+                float angularImpulseBrake = Mathf.Abs(brakeTorque) * subStepDeltaTime;
 
                 float deltaAngularDriveImpulse = angularImpulseDrive / wheelProperty.m_inertia;
                 float deltaAngularBrakeImpulse = angularImpulseBrake / wheelProperty.m_inertia;
-                float deltaAngularDragImpulse = angularImpulseDrag / wheelProperty.m_inertia;
-                float deltaAngularResistenceImpulse = deltaAngularBrakeImpulse + deltaAngularDragImpulse;
+                float deltaAngularResistenceImpulse = deltaAngularBrakeImpulse;
+
+               // Only apply drag when there is no control
+                if (angularImpulseDrive < EPS && angularImpulseBrake < EPS)
+                {
+                    float angularImpulseDrag = Mathf.Abs(wheelProperty.m_extraDragTorque) * subStepDeltaTime;
+                    float deltaAngularDragImpulse = angularImpulseDrag / wheelProperty.m_inertia;
+
+                    deltaAngularResistenceImpulse += deltaAngularDragImpulse;
+                }
 
                 wheelState.m_transitional.m_angularVelocity += deltaAngularDriveImpulse;
 
@@ -979,9 +1045,10 @@ namespace B3DVehicle
             for (int iter = 0; iter < iterCount; ++iter)
             {
                 //Debug.Log($"Iter{iter} -------------");
-
-                for (int i = 0; i < wheelCount; ++i)
+                for (int innerIter = 0; innerIter < wheelCount; ++innerIter)
                 {
+                    int i = (iter % 2 == 0) ? innerIter : wheelCount - 1 - innerIter;
+
                     WheelState wheelState = wheels[i].m_wheelState;
                     WheelProperties wheelProperty = wheels[i].m_wheelProperties;
                     SuspensionState suspensionState = suspensions[i].m_suspensionState;
@@ -1002,7 +1069,8 @@ namespace B3DVehicle
                     }
                     else
                     {
-                        CalculateWheelTransitionalVelocityStates(wheelProperty, vehicleState, ref wheelState);
+                        CalculateWheelTransitionalVelocityStates(
+                            subStepDeltaTime, wheelProperty, vehicleState, ref wheelState);
                         CalculateWheelDesiredLateralCounterSlipForce(
                             subStepDeltaTime, context, wheelProperty, vehicleState, suspensionState, ref wheelState);
                         CalculateWheelDesiredLongitudinalCounterSlipForce(context, wheelProperty, vehicleState, ref wheelState);

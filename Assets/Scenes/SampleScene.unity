@@ -3749,6 +3749,10 @@ MonoBehaviour:
       m_forwardToReverseSpeedThreshold: 0.1
       m_reverseToForwardSpeedThreshold: 0.1
     m_differentialGearRatio: 3.55
+    m_enableABS: 1
+    m_ABSOptimalSlipRatio: 0
+    m_ABSSlipToTorqueScaleCurve: {fileID: 11400000, guid: b74056d2f4b071c4e804f94e4bdc6b06,
+      type: 2}
     m_avgDrivingWheelRad: 0
     m_antiRollBarScale: 1
   m_vehicleState:
@@ -5218,14 +5222,13 @@ MonoBehaviour:
     m_wheelRadius: 0.35
     m_gripScale: 1
     m_inertia: -1
-    m_dragTorque: 10
+    m_extraDragTorque: 350
     m_slipAngleToLateralForceCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
       type: 2}
     m_slipRatioToGripCurve: {fileID: 11400000, guid: 36f8bb2b328ed5e4aa5e452362f9f9bd,
       type: 2}
     m_staticFrictionCoeff: 1.5
     m_brakeTorque: 5000
-    m_brakeToTorqueCurve: {fileID: 0}
     m_allowHandbrake: 0
     m_handbrakeTorque: 5000
     m_isSteerable: 1
@@ -5234,6 +5237,7 @@ MonoBehaviour:
   m_wheelState:
     m_currentTorque: 0
     m_currentBrakeTorque: 0
+    m_brakeType: 0
     m_currentSteerAngle: 0
     m_currentDirFoward_ls: {x: 0, y: 0, z: 0}
     m_currentDirFoward_ws: {x: 0, y: 0, z: 0}
@@ -5268,12 +5272,16 @@ MonoBehaviour:
       m_accumAvailableGripImpulse: 0
       m_accumGeneratedLateralImpulse: 0
       m_accumGeneratedLongitudinalImpulse: 0
+      m_ABSEngaged: 0
+      m_accumBrakeTorque: 0
+      m_subStepCount: 0
     m_desiredLateralImpulse: 0
     m_desiredLongitudinalImpulse: 0
     m_availableGripImpulse: 0
     m_currentLateralImpulse: 0
     m_currentLongitudinalImpulse: 0
     m_currentAngularVelocity: 0
+    m_isABSEngaged: 0
 --- !u!114 &187578693
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10687,14 +10695,13 @@ MonoBehaviour:
     m_wheelRadius: 0.35
     m_gripScale: 1
     m_inertia: -1
-    m_dragTorque: 10
+    m_extraDragTorque: 350
     m_slipAngleToLateralForceCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
       type: 2}
     m_slipRatioToGripCurve: {fileID: 11400000, guid: 36f8bb2b328ed5e4aa5e452362f9f9bd,
       type: 2}
     m_staticFrictionCoeff: 1.5
     m_brakeTorque: 5000
-    m_brakeToTorqueCurve: {fileID: 0}
     m_allowHandbrake: 0
     m_handbrakeTorque: 5000
     m_isSteerable: 1
@@ -10703,6 +10710,7 @@ MonoBehaviour:
   m_wheelState:
     m_currentTorque: 0
     m_currentBrakeTorque: 0
+    m_brakeType: 0
     m_currentSteerAngle: 0
     m_currentDirFoward_ls: {x: 0, y: 0, z: 0}
     m_currentDirFoward_ws: {x: 0, y: 0, z: 0}
@@ -10737,12 +10745,16 @@ MonoBehaviour:
       m_accumAvailableGripImpulse: 0
       m_accumGeneratedLateralImpulse: 0
       m_accumGeneratedLongitudinalImpulse: 0
+      m_ABSEngaged: 0
+      m_accumBrakeTorque: 0
+      m_subStepCount: 0
     m_desiredLateralImpulse: 0
     m_desiredLongitudinalImpulse: 0
     m_availableGripImpulse: 0
     m_currentLateralImpulse: 0
     m_currentLongitudinalImpulse: 0
     m_currentAngularVelocity: 0
+    m_isABSEngaged: 0
 --- !u!114 &321573845
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -42392,14 +42404,13 @@ MonoBehaviour:
     m_wheelRadius: 0.35
     m_gripScale: 1
     m_inertia: -1
-    m_dragTorque: 20
+    m_extraDragTorque: 350
     m_slipAngleToLateralForceCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
       type: 2}
     m_slipRatioToGripCurve: {fileID: 11400000, guid: 36f8bb2b328ed5e4aa5e452362f9f9bd,
       type: 2}
     m_staticFrictionCoeff: 1.625
     m_brakeTorque: 5000
-    m_brakeToTorqueCurve: {fileID: 0}
     m_allowHandbrake: 1
     m_handbrakeTorque: 5000
     m_isSteerable: 0
@@ -42408,6 +42419,7 @@ MonoBehaviour:
   m_wheelState:
     m_currentTorque: 0
     m_currentBrakeTorque: 0
+    m_brakeType: 0
     m_currentSteerAngle: 0
     m_currentDirFoward_ls: {x: 0, y: 0, z: 0}
     m_currentDirFoward_ws: {x: 0, y: 0, z: 0}
@@ -42442,12 +42454,16 @@ MonoBehaviour:
       m_accumAvailableGripImpulse: 0
       m_accumGeneratedLateralImpulse: 0
       m_accumGeneratedLongitudinalImpulse: 0
+      m_ABSEngaged: 0
+      m_accumBrakeTorque: 0
+      m_subStepCount: 0
     m_desiredLateralImpulse: 0
     m_desiredLongitudinalImpulse: 0
     m_availableGripImpulse: 0
     m_currentLateralImpulse: 0
     m_currentLongitudinalImpulse: 0
     m_currentAngularVelocity: 0
+    m_isABSEngaged: 0
 --- !u!114 &1334842685
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -48953,14 +48969,13 @@ MonoBehaviour:
     m_wheelRadius: 0.35
     m_gripScale: 1
     m_inertia: -1
-    m_dragTorque: 20
+    m_extraDragTorque: 350
     m_slipAngleToLateralForceCurve: {fileID: 11400000, guid: a213efd46c0730b42b1eeaa393dc6a9d,
       type: 2}
     m_slipRatioToGripCurve: {fileID: 11400000, guid: 36f8bb2b328ed5e4aa5e452362f9f9bd,
       type: 2}
     m_staticFrictionCoeff: 1.625
     m_brakeTorque: 5000
-    m_brakeToTorqueCurve: {fileID: 0}
     m_allowHandbrake: 1
     m_handbrakeTorque: 5000
     m_isSteerable: 0
@@ -48969,6 +48984,7 @@ MonoBehaviour:
   m_wheelState:
     m_currentTorque: 0
     m_currentBrakeTorque: 0
+    m_brakeType: 0
     m_currentSteerAngle: 0
     m_currentDirFoward_ls: {x: 0, y: 0, z: 0}
     m_currentDirFoward_ws: {x: 0, y: 0, z: 0}
@@ -49003,12 +49019,16 @@ MonoBehaviour:
       m_accumAvailableGripImpulse: 0
       m_accumGeneratedLateralImpulse: 0
       m_accumGeneratedLongitudinalImpulse: 0
+      m_ABSEngaged: 0
+      m_accumBrakeTorque: 0
+      m_subStepCount: 0
     m_desiredLateralImpulse: 0
     m_desiredLongitudinalImpulse: 0
     m_availableGripImpulse: 0
     m_currentLateralImpulse: 0
     m_currentLongitudinalImpulse: 0
     m_currentAngularVelocity: 0
+    m_isABSEngaged: 0
 --- !u!114 &1568680979
 MonoBehaviour:
   m_ObjectHideFlags: 0

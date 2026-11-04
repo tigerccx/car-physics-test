@@ -16,13 +16,12 @@ namespace B3DVehicle
         [Description("Set to -1 to use automatic calculation from mass")]
         public float m_inertia = -1.0f;
         //TODO: Might need to distinguish this against the resistence engine and drive train provides
-        public float m_dragTorque = 10.0f; 
+        public float m_extraDragTorque = 350.0f; 
         public NormalizedCurveAsset m_slipAngleToLateralForceCurve;
         public NormalizedCurveAsset m_slipRatioToGripCurve;
         public float m_staticFrictionCoeff = 0.7f;
 
         public float m_brakeTorque = 2000.0f;
-        public NormalizedCurveAsset m_brakeToTorqueCurve;
         public bool m_allowHandbrake = false;
         public float m_handbrakeTorque = 5000.0f;
         
@@ -111,6 +110,11 @@ namespace B3DVehicle
         public float m_differentialGearRatio = 1.0f;
         //public float m_driveTrainInertia = 0.1f;
 
+        [Header("Driving")]
+        public bool m_enableABS = true;
+        public float m_ABSOptimalSlipRatio = 0f;
+        public NormalizedCurveAsset m_ABSSlipToTorqueScaleCurve;
+
         [Header("Book Keeping")]
         [ReadOnly]
         public float m_avgDrivingWheelRad = 0.0f;
@@ -163,6 +167,18 @@ namespace B3DVehicle
         public float m_accumAvailableGripImpulse = 0.0f;
         public float m_accumGeneratedLateralImpulse = 0.0f;
         public float m_accumGeneratedLongitudinalImpulse = 0.0f;
+
+        public bool m_ABSEngaged = false;
+        public float m_accumBrakeTorque = 0.0f;
+
+        public int m_subStepCount = 0;
+    }
+
+    [System.Serializable]
+    public enum WheelBrakeType
+    {
+        Brake,
+        HandBrake
     }
 
     [System.Serializable]
@@ -171,6 +187,7 @@ namespace B3DVehicle
         //TODO: 轮胎超过一定角度后不再提供抓地（抓地力 vs 角度 曲线？）
         public float m_currentTorque = 0.0f;
         public float m_currentBrakeTorque = 0.0f; // >=0
+        public WheelBrakeType m_brakeType = WheelBrakeType.Brake;
         public float m_currentSteerAngle = 0.0f;
 
         public Vector3 m_currentDirFoward_ls = Vector3.zero;
@@ -202,6 +219,8 @@ namespace B3DVehicle
         public float m_currentLateralImpulse = 0.0f;
         public float m_currentLongitudinalImpulse = 0.0f;
         public float m_currentAngularVelocity = 0.0f; //possitive = spin from back to front through top
+
+        public bool m_isABSEngaged = false;
 
         public override string ToString()
         {

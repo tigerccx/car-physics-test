@@ -290,29 +290,6 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         // But more substeps for wheel simulation itself
 
         int countIterWheel = 4; //More wheel substep
-        //float dividedSubStepDeltaTime = subStepDeltaTime / countIterWheel;
-        //for (int iterWheel = 0; iterWheel < countIterWheel; ++iterWheel)
-        //{
-        //    foreach (int idx in Enumerable.Range(0, 4).OrderBy(x => m_random.Next()))
-        //        //for (int i = 0; i < m_suspensions.Count; ++i)
-        //    {
-        //        //int idx = (iterWheel + i) % m_suspensions.Count;
-
-        //        Suspension suspension = m_suspensions[idx];
-        //        Wheel wheel = m_wheels[idx];
-
-        //        VehiclePhysics.UpdateWheelSubstep(
-        //            in deltaPosition, in deltaRotation, 
-        //            dividedSubStepDeltaTime,
-        //            m_vehicleContext,
-        //            suspension.m_suspensionProperties,
-        //            wheel.m_wheelProperties,
-        //            in suspension.m_suspensionState,
-        //            ref wheel.m_wheelState,
-        //            ref m_vehicleState);
-        //    }
-        //}
-
         VehiclePhysics.UpdateWheelSubstep(
                     in deltaPosition, in deltaRotation,
                     subStepDeltaTime,

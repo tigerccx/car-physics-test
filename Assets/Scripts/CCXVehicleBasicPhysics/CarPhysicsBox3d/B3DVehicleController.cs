@@ -66,7 +66,12 @@ public class B3DVehicleController : MonoBehaviour
         {
             m_throttleInternal = Smooth(m_throttleInternal, throttleInputRead, 
                 IsIncrease(m_throttleInternal, throttleInputRead) ? m_throttleSmoothSpeedIncrease: m_throttleSmoothSpeedReturn);
-            throttleOutput = Mathf.Sign(m_throttleInternal) * m_throttleSmoothInputOutputCurve.Evaluate(Mathf.Abs(m_throttleInternal));
+            float throttleEvaluated = m_throttleSmoothInputOutputCurve.Evaluate(Mathf.Abs(m_throttleInternal));
+            if (Mathf.Abs(m_throttleInternal) < B3DVehicle.VehiclePhysics.EPS)
+            {
+                throttleEvaluated = 0.0f;
+            }
+            throttleOutput = Mathf.Sign(m_throttleInternal) * throttleEvaluated;
         }
         else
         {
@@ -81,7 +86,12 @@ public class B3DVehicleController : MonoBehaviour
         float steeringOutput = 0.0f;
         m_steeringInternal = Smooth(m_steeringInternal, steeringInputRead,
             IsIncrease(m_steeringInternal, steeringInputRead) ? m_steeringSmoothSpeedIncrease : m_steeringSmoothSpeedReturn);
-        steeringOutput = Mathf.Sign(m_steeringInternal) * m_steeringSmoothInputOutputCurve.Evaluate(Mathf.Abs(m_steeringInternal));
+        float steeringEvaluated = m_steeringSmoothInputOutputCurve.Evaluate(Mathf.Abs(m_steeringInternal));
+        if (Mathf.Abs(m_steeringInternal) < B3DVehicle.VehiclePhysics.EPS)
+        {
+            steeringEvaluated = 0.0f;
+        }
+        steeringOutput = Mathf.Sign(m_steeringInternal) * steeringEvaluated;
         m_vehicle.m_steeringInput = steeringOutput;
 
         // Others
