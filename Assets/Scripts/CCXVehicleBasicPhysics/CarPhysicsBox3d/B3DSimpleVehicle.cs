@@ -33,18 +33,13 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     private Wheel m_wheelRR = null;
 
     // Driving
-    [Header("Gas")]
-    public NormalizedCurveAsset m_gasInputCurve;
-
-    [Header("Steering")]
-    public NormalizedCurveAsset m_steeringInputCurve;
 
     // Input States
-    private float m_throttleInput = 0f;
-    private bool m_brakeInput = false;
-    private bool m_handbrakeInput = false;
-    private float m_steeringInput = 0f;
-    private int m_gearChangeInput = 0;
+    public float m_throttleInput = 0f;
+    public bool m_brakeInput = false;
+    public bool m_handbrakeInput = false;
+    public float m_steeringInput = 0f;
+    public int m_gearChangeInput = 0;
 
     private System.Random m_random = new System.Random();
 
@@ -116,23 +111,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
 
     private void Update()
     {
-        CacheInputs();
-    }
-
-    private void CacheInputs()
-    {
-        m_throttleInput = UnityEngine.Input.GetAxis("Vertical");
-        m_steeringInput = UnityEngine.Input.GetAxis("Horizontal");
-        m_brakeInput = UnityEngine.Input.GetAxis("Brake") > 0;
-        m_handbrakeInput = UnityEngine.Input.GetAxis("Handbrake") > 0;
-        if (UnityEngine.Input.GetButtonDown("Gear Up"))
-        {
-            m_gearChangeInput += 1;
-        }
-        if (UnityEngine.Input.GetButtonDown("Gear Down"))
-        {
-            m_gearChangeInput -= 1;
-        }
+        
     }
 
     private void CalculateInputState()
@@ -140,20 +119,10 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         VehicleInputs inputs = m_vehicleContext.m_inputs;
 
         float steering = m_debugUseLockedSteering ? Mathf.Clamp(m_debugLockedSteering, -1f, 1f) : m_steeringInput;
-        if(m_steeringInputCurve) //TODO: 这个不应该在Vehicle上，应该在一个统一的Input Manager里面
-        {
-            steering = MathF.Sign(steering) * MathF.Max(0.0f, m_steeringInputCurve.Evaluate(MathF.Abs(steering)));
-        }
         inputs.m_steering = steering;
 
         float throttle = m_throttleInput;
         float brake = 0.0f;
-
-        // Remap throttle
-        if (m_gasInputCurve)
-        {
-            inputs.m_throttle = m_gasInputCurve.Evaluate(Mathf.Abs(m_throttleInput));
-        }
 
         if (VehiclePhysics.IsInForwardGear(m_vehicleState))
         {

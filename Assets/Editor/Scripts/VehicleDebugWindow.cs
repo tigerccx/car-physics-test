@@ -101,12 +101,14 @@ public class VehicleDebugWindow : EditorWindow
             ? "Live physics data. Arrows show direction only. -- means unavailable. Wheels map by local mount positions."
             : "Enter Play mode with an initialized Box3D body. -- means unavailable; wheel poses are schematic.",
             MessageType.Info);
-        Rect diagram = GUILayoutUtility.GetRect(630f, 220f, GUILayout.ExpandWidth(true));
-        // Keep the diagram near the vehicle rather than distributing it across a wide window.
-        float vehicleWidth = Mathf.Min(360f, diagram.width - 240f);
+        Rect diagram = GUILayoutUtility.GetRect(738f, 220f, GUILayout.ExpandWidth(true));
+        // Trim right-side space without moving the vehicle's drawing origin.
+        float vehicleWidth = 280f;
         Rect vehicleRect = new Rect(diagram.x, diagram.y, vehicleWidth, diagram.height);
         DrawDiagram(vehicleRect);
-        DrawTractionCircles(new Rect(vehicleRect.xMax + 8f, diagram.y, 232f, diagram.height));
+        Rect inputRect = new Rect(vehicleRect.xMax + 8f, diagram.y + 8f, 180f, diagram.height - 16f);
+        DrawInputPanel(inputRect);
+        DrawTractionCircles(new Rect(inputRect.xMax + 8f, diagram.y, 232f, diagram.height));
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.BeginVertical(GUILayout.Width(210f));
         DrawVehicleData();
@@ -178,6 +180,13 @@ public class VehicleDebugWindow : EditorWindow
     private static void PopulateDebugData(B3DSimpleVehicle vehicle, DebugData target)
     {
         target.HasPhysicsData = false;
+        // Input display is independent of native physics-body initialization.
+        target.HasInputData = Application.isPlaying;
+        target.ThrottleInput = vehicle.m_throttleInput;
+        target.SteeringInput = vehicle.m_debugUseLockedSteering
+            ? Mathf.Clamp(vehicle.m_debugLockedSteering, -1f, 1f) : vehicle.m_steeringInput;
+        target.BrakeInput = vehicle.m_brakeInput;
+        target.HandbrakeInput = vehicle.m_handbrakeInput;
         target.LocalNorth = vehicle.transform.InverseTransformDirection(Vector3.forward);
         foreach (WheelDebugData wheel in target.Wheels)
         {
@@ -386,11 +395,11 @@ public class VehicleDebugWindow : EditorWindow
     {
         if (Event.current.type != EventType.Repaint) return;
         EditorGUI.DrawRect(rect, new Color(0.12f, 0.13f, 0.15f));
-        Vector2 center = rect.center;
+        Vector2 center = new Vector2(rect.x + 180f, rect.center.y);
         Rect body = new Rect(center.x - 50f, center.y - 75f, 100f, 150f);
         GUI.Box(body, GUIContent.none, compactPanel);
         GUI.Label(new Rect(center.x - 16f, body.y + 8f, 80f, 20f), "FRONT", compactWhite);
-        GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, 400f, 20f), "Vehicle local XZ plane (direction only)", compactWhite);
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, rect.width - 24f, 20f), "Vehicle local XZ plane (direction only)", compactWhite);
         Handles.BeginGUI();
         Color previous = Handles.color;
         try
@@ -471,6 +480,35 @@ public class VehicleDebugWindow : EditorWindow
         finally { Handles.color = previous; Handles.EndGUI(); }
     }
 
+    private void DrawInputPanel(Rect rect)
+    {
+        GUI.Box(rect, GUIContent.none, compactPanel);
+        GUI.Label(new Rect(rect.x + 10f, rect.y + 8f, 95f, 13f), "Steering", compactBold);
+        GUI.Label(new Rect(rect.x + 112f, rect.y + 8f, 65f, 13f), "Throttle", compactBold);
+        Rect steeringTrack = new Rect(rect.x + 10f, rect.y + 76f, 95f, 18f);
+        Rect throttleTrack = new Rect(rect.x + 137f, rect.y + 30f, 18f, 112f);
+        // Ignore slider return values: these controls visualize inputs and never write them.
+        using (new EditorGUI.DisabledScope(true))
+        {
+            GUI.HorizontalSlider(steeringTrack, data.HasInputData ? Mathf.Clamp(data.SteeringInput, -1f, 1f) : 0f, -1f, 1f);
+            GUI.VerticalSlider(throttleTrack, data.HasInputData ? Mathf.Clamp(data.ThrottleInput, -1f, 1f) : 0f, 1f, -1f);
+        }
+        if (Event.current.type == EventType.Repaint)
+        {
+            Color tick = new Color(0.65f, 0.65f, 0.65f);
+            EditorGUI.DrawRect(new Rect(steeringTrack.center.x, steeringTrack.y - 3f, 1f, 22f), tick);
+            EditorGUI.DrawRect(new Rect(throttleTrack.x - 3f, throttleTrack.center.y, 22f, 1f), tick);
+        }
+        GUI.Label(new Rect(rect.x + 10f, rect.y + 100f, 95f, 13f),
+            data.HasInputData ? Format(data.SteeringInput) : "--", compactMini);
+        GUI.Label(new Rect(rect.x + 112f, rect.y + 146f, 65f, 13f),
+            data.HasInputData ? Format(data.ThrottleInput) : "--", compactMini);
+        GUI.Label(new Rect(rect.x + 10f, rect.yMax - 35f, rect.width - 20f, 13f),
+            "Brake: " + (data.HasInputData ? data.BrakeInput.ToString() : "--"), compactMini);
+        GUI.Label(new Rect(rect.x + 10f, rect.yMax - 19f, rect.width - 20f, 13f),
+            "Handbrake: " + (data.HasInputData ? data.HandbrakeInput.ToString() : "--"), compactMini);
+    }
+
     private static Vector2 Project(Vector3 local) => new Vector2(local.x, -local.z);
 
     private static void Arrow(Vector2 start, Vector2 direction, float length, Color color)
@@ -486,6 +524,8 @@ public class VehicleDebugWindow : EditorWindow
 
     private sealed class DebugData
     {
+        public bool HasInputData, BrakeInput, HandbrakeInput;
+        public float ThrottleInput, SteeringInput;
         public bool HasPhysicsData;
         public Vector3 LocalNorth;
         public float Speed = 0f, SpeedMeasured = 0f, SpeedKmH = 0f;
