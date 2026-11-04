@@ -482,7 +482,7 @@ namespace B3DVehicle
                 }
 
                 float resistenceTorque = Mathf.Max(sampledRedlineTorque, sampledSpeedLimitTorque);
-
+                //Debug.Log($"resistenceTorque {resistenceTorque} | Redline{sampledRedlineTorque} SpeedLimit{sampledSpeedLimitTorque}");
 
                 vehicleState.m_engineOutputTorque = -resistenceTorque;
             }
@@ -490,8 +490,11 @@ namespace B3DVehicle
             float loadTorque = vehicleProperty.m_engineProperty.m_engineInternalLoadTorque;
             float maxLoadTorque = Mathf.Max(0.0f, vehicleState.m_engineAngularVelocity - engineIdleAngularVelocity) * vehicleProperty.m_engineProperty.m_engineInertia / deltaTime;
             loadTorque = Mathf.Min(maxLoadTorque, loadTorque);
+            //Debug.Log($"loadTorque {loadTorque}");
 
             vehicleState.m_engineNetOutputTorque = vehicleState.m_engineOutputTorque - loadTorque;
+
+            //Debug.Log($"engineNetOutputTorque {vehicleState.m_engineNetOutputTorque}");
         }
 
         public static void UpdateWheelStatesFromVehicle(
