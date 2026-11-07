@@ -16,6 +16,7 @@ public class VehicleDebugWindow : EditorWindow
     private static readonly string[] WheelNames = { "Left Front", "Right Front", "Left Rear", "Right Rear" };
     private static readonly Color NorthColor = new Color(0.45f, 0.8f, 1f);
     private static readonly Color WheelColor = new Color(1f, 0.8f, 0.25f);
+    private static readonly Color WheelColorLight = new Color(1f, 0.8f, 0.25f, 0.3f);
     private static readonly Color VelocityColor = new Color(0.3f, 1f, 0.6f);
     private static readonly Color YawColor = new Color(1f, 0.5f, 0.75f);
 
@@ -252,7 +253,8 @@ public class VehicleDebugWindow : EditorWindow
             Wheel wheel = suspension.GetComponent<Wheel>();
             SuspensionState suspensionState = suspension.m_suspensionState;
             WheelState wheelState = wheel ? wheel.m_wheelState : null;
-            if (suspensionState == null || wheelState == null ||
+            WheelProperties wheelProperty = wheel ? wheel.m_wheelProperties : null;
+            if (suspensionState == null || wheelState == null || wheelProperty == null ||
                 wheelState.m_currentDirFoward_ws.sqrMagnitude < 0.000001f ||
                 suspensionState.m_currentDir_ws.sqrMagnitude < 0.000001f)
             {
@@ -263,6 +265,7 @@ public class VehicleDebugWindow : EditorWindow
             result.LocalForward = vehicleTransform.InverseTransformDirection(wheelState.m_currentDirFoward_ws).normalized;
             result.SlipAngle = wheelState.m_currentSlipAngle; // Already in degrees.
             result.TurnAngle = Mathf.Atan2(result.LocalForward.x, result.LocalForward.z) * Mathf.Rad2Deg;
+            result.TurnAngleLimit = wheelProperty.m_isSteerable ? wheelProperty.m_allowedAngle : -1.0f;
             result.LateralImpulse = wheelState.m_currentLateralImpulse;
             result.DesiredLateral = wheelState.m_desiredLateralImpulse;
             result.Longitudinal = wheelState.m_currentLongitudinalImpulse;
@@ -419,6 +422,18 @@ public class VehicleDebugWindow : EditorWindow
                 Handles.DrawAAPolyLine(2f, wheelCenter - side - along, wheelCenter + side - along,
                     wheelCenter + side + along, wheelCenter - side + along, wheelCenter - side - along);
                 Arrow(wheelCenter, forward, 38f, WheelColor);
+                if (data.Wheels[i].TurnAngleLimit >= 0.0f)
+                {
+                    float offset = Mathf.Tan(Mathf.Deg2Rad * data.Wheels[i].TurnAngleLimit);
+                    Vector2 dirRightLimit = new Vector2(offset, -1f);
+                    dirRightLimit.Normalize();
+                    Vector2 dirLeftLimit = new Vector2(-offset, -1f);
+                    dirLeftLimit.Normalize();
+
+                    Handles.color = WheelColorLight;
+                    Handles.DrawAAPolyLine(1.5f, wheelCenter, wheelCenter + dirRightLimit * 38f);
+                    Handles.DrawAAPolyLine(1.5f, wheelCenter, wheelCenter + dirLeftLimit * 38f);
+                }
                 GUI.Label(new Rect(wheelCenter.x - 5f, wheelCenter.y + 25f, 40f, 20f),
                     new[] { "LF", "RF", "LR", "RR" }[i], compactWhite);
             }
@@ -546,7 +561,7 @@ public class VehicleDebugWindow : EditorWindow
         public int MountCount;
         public string Status;
         public Vector3 LocalForward = Vector3.forward;
-        public float SlipAngle = 0f, LateralImpulse = 0f, TurnAngle = 0f;
+        public float SlipAngle = 0f, LateralImpulse = 0f, TurnAngle = 0f, TurnAngleLimit = 0f;
         public float AxialVelocity = 0f, Length = 0f, GroundDistance = 0f, DamperForce = 0f, SuspensionForce = 0f;
         public float DesiredLateral, Longitudinal, DesiredLongitudinal, AvailableGrip, UsedGrip;
         public float RPM, LinearSpeed, GroundSpeed, SlipRatio, Torque, BrakeTorque, Load, LateralSign;
