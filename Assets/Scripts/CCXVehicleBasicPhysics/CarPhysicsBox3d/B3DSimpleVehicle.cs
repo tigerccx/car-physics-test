@@ -6,13 +6,15 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.Windows;
 
 [DefaultExecutionOrder(100)]
 
 public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixedPostUpdate
 {
-    public VehicleProperties m_vehicleProperties;
+    [FormerlySerializedAs("m_vehicleProperties")]
+    public VehicleProperties m_vehicleProperty;
 
     [SerializeField, ReadOnly]
     public VehicleState m_vehicleState = new VehicleState();
@@ -62,7 +64,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
 
     private void OnValidate()
     {
-        VehiclePhysics.AutoConfigATGearSettings(ref m_vehicleProperties);
+        VehiclePhysics.AutoConfigATGearSettings(ref m_vehicleProperty);
     }
 
     // Start is called before the first frame update
@@ -234,7 +236,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         // Update wheel driving states
         VehiclePhysics.UpdateWheelStatesFromVehicle(Time.fixedDeltaTime,
             m_vehicleContext,
-            m_vehicleProperties,
+            m_vehicleProperty,
             m_vehicleState,
             m_wheels);
 
@@ -287,7 +289,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
             VehiclePhysics.InitSuspension(m_vehicleState, ref suspension);
         }
 
-        VehiclePhysics.InitVehicleState(ref m_vehicleProperties, m_wheels, ref m_vehicleState);
+        VehiclePhysics.InitVehicleState(ref m_vehicleProperty, m_wheels, ref m_vehicleState);
 
         UpdateVehiclePhysics_SuspensionStates();
         UpdateVehiclePhysics_WheelStates();
@@ -312,6 +314,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
             VehiclePhysics.PrepareWheelSubsteps(
                     Time.fixedDeltaTime,
                     m_vehicleContext,
+                    m_vehicleProperty,
                     suspension.m_suspensionProperties,
                     wheel.m_wheelProperties,
                     in suspension.m_suspensionState,
@@ -332,7 +335,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         VehiclePhysics.UpdateWheelSubstep(
                     in deltaPosition, in deltaRotation,
                     subStepDeltaTime,
-                    m_vehicleContext, m_vehicleProperties,
+                    m_vehicleContext, m_vehicleProperty,
                     countIterWheel,
                     m_suspensions,
                     m_wheels,
@@ -342,7 +345,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
             subStepDeltaTime,
             m_vehicleContext,
             m_wheels,
-            m_vehicleProperties,
+            m_vehicleProperty,
             ref m_vehicleState);
     }
 
@@ -368,7 +371,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
 
         VehiclePhysics.UpdateVehicleInternalStates(Time.fixedDeltaTime,
             ref m_vehicleContext,
-            m_vehicleProperties,
+            m_vehicleProperty,
             m_wheels,
             ref m_vehicleState);
     }

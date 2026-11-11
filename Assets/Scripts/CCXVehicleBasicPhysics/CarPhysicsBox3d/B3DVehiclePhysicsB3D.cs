@@ -108,6 +108,25 @@ namespace B3DVehicle
             return Mathf.DeltaAngle(0f, angle);
         }
 
+        public static Vector2 ClampToEllipse(Vector2 v, float radiusX, float radiusY)
+        {
+            // A wheel can still hit the ground while its suspension load is zero.
+            // A zero radius disables that axis, leaving at most a line segment.
+            if (radiusX <= 0f && radiusY <= 0f)
+                return Vector2.zero;
+
+            if (radiusX <= 0f)
+                return new Vector2(0f, Mathf.Clamp(v.y, -radiusY, radiusY));
+
+            if (radiusY <= 0f)
+                return new Vector2(Mathf.Clamp(v.x, -radiusX, radiusX), 0f);
+
+            double x = (double)v.x / radiusX;
+            double y = (double)v.y / radiusY;
+            double scale = Math.Max(1.0, Math.Sqrt(x * x + y * y));
+            return new Vector2((float)(v.x / scale), (float)(v.y / scale));
+        }
+
         public static void GetWheelPose(
             in WheelState wheelState, bool isRightFacing,
             out Vector3 pos, out Quaternion rot)
@@ -373,43 +392,47 @@ namespace B3DVehicle
             return shouldEngage;
         }
 
-        private static void CalculateLimiterState(
+        private static void CalculateRevLimiterState(
             float deltaTime, in VehicleProperties vehicleProperty, ref VehicleState vehicleState)
         {
-            if (!vehicleState.m_limiterEngaged)
+            if (!vehicleState.m_revLimiterEngaged)
             {
-                if (ShouldRevLimiterEngage(vehicleProperty, vehicleState) || 
-                    ShouldSpeedLimiterEngage(vehicleProperty, vehicleState))
+                if (ShouldRevLimiterEngage(vehicleProperty, vehicleState))
                 {
-                    vehicleState.m_limitEngageTimer += deltaTime;
-                    if (vehicleState.m_limitEngageTimer >= vehicleProperty.m_engineProperty.m_limiterReactionTime)
+                    vehicleState.m_revLimitEngageTimer += deltaTime;
+                    if (vehicleState.m_revLimitEngageTimer >= vehicleProperty.m_engineProperty.m_limiterReactionTime)
                     {
-                        vehicleState.m_limiterEngaged = true;
-                        vehicleState.m_limitEngageTimer = 0.0f;
+                        vehicleState.m_revLimiterEngaged = true;
+                        vehicleState.m_revLimitEngageTimer = 0.0f;
                     }
                 }
                 else
                 {
-                    vehicleState.m_limitEngageTimer = 0.0f;
+                    vehicleState.m_revLimitEngageTimer = 0.0f;
                 }
             }
             else
             {
-                if (! ShouldRevLimiterEngage(vehicleProperty, vehicleState) && 
-                    !ShouldSpeedLimiterEngage(vehicleProperty, vehicleState))
+                if (!ShouldRevLimiterEngage(vehicleProperty, vehicleState))
                 {
-                    vehicleState.m_limitEngageTimer += deltaTime;
-                    if (vehicleState.m_limitEngageTimer >= vehicleProperty.m_engineProperty.m_limiterReactionTime)
+                    vehicleState.m_revLimitEngageTimer += deltaTime;
+                    if (vehicleState.m_revLimitEngageTimer >= vehicleProperty.m_engineProperty.m_limiterReactionTime)
                     {
-                        vehicleState.m_limiterEngaged = false;
-                        vehicleState.m_limitEngageTimer = 0.0f;
+                        vehicleState.m_revLimiterEngaged = false;
+                        vehicleState.m_revLimitEngageTimer = 0.0f;
                     }
                 }
                 else
                 {
-                    vehicleState.m_limitEngageTimer = 0.0f;
+                    vehicleState.m_revLimitEngageTimer = 0.0f;
                 }
             }
+        }
+
+        private static void CalculateLimiterState(
+            float deltaTime, in VehicleProperties vehicleProperty, ref VehicleState vehicleState)
+        {
+            vehicleState.m_speedLimiterEngaged = ShouldSpeedLimiterEngage(vehicleProperty, vehicleState);
         }
 
         public static void InitVehicleState(
@@ -494,6 +517,7 @@ namespace B3DVehicle
             }
 
             //Calculate limiter (revolve limiter and speed limiter)
+            CalculateRevLimiterState(deltaTime, vehicleProperty, ref vehicleState);
             CalculateLimiterState(deltaTime, vehicleProperty, ref vehicleState);
 
             //Calculate Torque
@@ -503,7 +527,7 @@ namespace B3DVehicle
                 sampledTorque = vehicleProperty.m_engineProperty.m_torqueCurve.Evaluate(vehicleState.m_engineRPM);
             }
 
-            if (!vehicleState.m_limiterEngaged)
+            if (!vehicleState.m_revLimiterEngaged && !vehicleState.m_speedLimiterEngaged)
             {
                 vehicleState.m_engineOutputTorque = sampledTorque;
                 vehicleState.m_engineOutputTorque *= Mathf.Abs(vehicleContext.m_inputs.m_throttle);
@@ -511,21 +535,27 @@ namespace B3DVehicle
             else
             {
                 // Rev limiter
-                float overRedlineRPM = Mathf.Max(vehicleState.m_engineRPM - vehicleProperty.m_engineProperty.m_engineMaxRPM, 0.0f);
                 float sampledRedlineTorque = 0.0f;
-                if (vehicleProperty.m_engineProperty.m_revLimiterEngagedRPMToTorqueCurve)
+                if (vehicleState.m_revLimiterEngaged)
                 {
-                    sampledRedlineTorque = vehicleProperty.m_engineProperty.m_revLimiterEngagedRPMToTorqueCurve.Evaluate(overRedlineRPM);
+                    float overRedlineRPM = Mathf.Max(vehicleState.m_engineRPM - vehicleProperty.m_engineProperty.m_engineMaxRPM, 0.0f);
+                    if (vehicleProperty.m_engineProperty.m_revLimiterEngagedRPMToTorqueCurve)
+                    {
+                        sampledRedlineTorque = vehicleProperty.m_engineProperty.m_revLimiterEngagedRPMToTorqueCurve.Evaluate(overRedlineRPM);
+                    }
                 }
                 
                 // Speed limiter
-                float overForwardLimitSpeed = Mathf.Max(vehicleState.m_measuredVehicleSpeed - vehicleProperty.m_engineProperty.m_forwardSpeedLimit, 0.0f);
-                float overBackwardLimitSpeed = Mathf.Max(vehicleProperty.m_engineProperty.m_backwardSpeedLimit - vehicleState.m_measuredVehicleSpeed, 0.0f);
-                float overLimitSpeed = Mathf.Max(overForwardLimitSpeed, overBackwardLimitSpeed);
                 float sampledSpeedLimitTorque = 0.0f;
-                if (vehicleProperty.m_engineProperty.m_speedLimiterEngagedSpeedToTorqueCurve)
+                if (vehicleState.m_speedLimiterEngaged)
                 {
-                    sampledSpeedLimitTorque = vehicleProperty.m_engineProperty.m_speedLimiterEngagedSpeedToTorqueCurve.Evaluate(overLimitSpeed);
+                    float overForwardLimitSpeed = Mathf.Max(vehicleState.m_measuredVehicleSpeed - vehicleProperty.m_engineProperty.m_forwardSpeedLimit, 0.0f);
+                    float overBackwardLimitSpeed = Mathf.Max(vehicleProperty.m_engineProperty.m_backwardSpeedLimit - vehicleState.m_measuredVehicleSpeed, 0.0f);
+                    float overLimitSpeed = Mathf.Max(overForwardLimitSpeed, overBackwardLimitSpeed);
+                    if (vehicleProperty.m_engineProperty.m_speedLimiterEngagedSpeedToTorqueCurve)
+                    {
+                        sampledSpeedLimitTorque = vehicleProperty.m_engineProperty.m_speedLimiterEngagedSpeedToTorqueCurve.Evaluate(overLimitSpeed);
+                    }
                 }
 
                 float resistenceTorque = Mathf.Max(sampledRedlineTorque, sampledSpeedLimitTorque);
@@ -1101,16 +1131,40 @@ namespace B3DVehicle
             UpdateWheelEffectiveMassAtContact(vehicleState, ref wheelState);
         }
 
+        private static void CalculateAndApplyWheelDriveAssist_Handbrake(
+            in VehicleContext vehicleContext,
+            in WheelProperties wheelProperty,
+            ref WheelState wheelState)
+        {
+            //No need to engage
+            if (!vehicleContext.m_inputs.m_handbrake || !wheelProperty.m_allowHandbrake)
+            {
+                wheelState.m_dynamicGripLateralScale = 1.0f;
+                return;
+            }
+
+            wheelState.m_dynamicGripLateralScale = 0.2f;
+        }
+
         public static void PrepareWheelSubsteps(
             float fixedDeltaTime,
-            in VehicleContext context,
-            in SuspensionProperties suspensionProperties,
-            in WheelProperties wheelProperties,
+            in VehicleContext vehicleContext,
+            in VehicleProperties vehicleProperty,
+            in SuspensionProperties suspensionProperty,
+            in WheelProperties wheelProperty,
             in SuspensionState suspensionState,
             ref WheelState wheelState,
             ref VehicleState vehicleState)
         {
             InitWheelTransitionalStates(ref wheelState);
+
+            wheelState.m_dynamicGripLongitudinalScale = 1.0f;
+            wheelState.m_dynamicGripLateralScale = 1.0f;
+            if (vehicleProperty.m_enableDriveAssist)
+            {
+                CalculateAndApplyWheelDriveAssist_Handbrake(vehicleContext, wheelProperty, ref wheelState);
+            }
+
             vehicleState.m_transitionalVelocity = vehicleState.m_b3dBody.velocity;
         }
 
@@ -1272,6 +1326,23 @@ namespace B3DVehicle
             wheelState.m_transitional.m_maxGripImpulse = maxGripImpulse;
         }
 
+        //Return if the result was clamped or not 
+        private static bool CalculateClampedDesiredImpulse(
+            Vector2 impulseLatLong,  //Vector2(Lateral, Longitudinal)
+            in WheelProperties wheelProperty,
+            in WheelState wheelState,
+            out Vector2 impulseClamped)
+        {
+            float radX, radY;
+            radX = radY = wheelState.m_transitional.m_maxGripImpulse;
+
+            radX *= wheelProperty.m_gripLateralScale * wheelState.m_dynamicGripLateralScale;
+            radY *= wheelProperty.m_gripLongitudinalScale * wheelState.m_dynamicGripLongitudinalScale;
+
+            impulseClamped = ClampToEllipse(impulseLatLong, radX, radY);
+            return impulseLatLong.sqrMagnitude > impulseClamped.sqrMagnitude + EPS;
+        }
+
         public static void UpdateWheelSubstep(
             in Vector3 deltaPosition, in Quaternion deltaRotation,
             float subStepDeltaTime,
@@ -1368,10 +1439,8 @@ namespace B3DVehicle
                         Vector2 newAccumImpulse = wheelState.m_transitional.m_substepAccumImpulse + new Vector2(
                             wheelState.m_transitional.m_desiredDeltaLateralImpulse, 
                             wheelState.m_transitional.m_desiredDeltaLongitudinalImpulse);
-                        float maxGripImpulse = wheelState.m_transitional.m_maxGripImpulse;
-                        newAccumImpulse = Vector2.ClampMagnitude(newAccumImpulse, maxGripImpulse);
-
-                        wheelState.m_transitional.m_desireExceedsMaxGrip = newAccumImpulse.sqrMagnitude > maxGripImpulse * maxGripImpulse;
+                        //Replace with Calculate Clamped Impulse
+                        wheelState.m_transitional.m_desireExceedsMaxGrip = CalculateClampedDesiredImpulse(newAccumImpulse, wheelProperty, wheelState, out newAccumImpulse);
 
                         Vector2 clampedCorrectionImpulse = newAccumImpulse - wheelState.m_transitional.m_substepAccumImpulse;
                         float deltaLateralImpulse = clampedCorrectionImpulse.x;

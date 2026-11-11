@@ -27,7 +27,7 @@ public class B3DVehicleDebugControl : MonoBehaviour
         if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame &&
             m_controller.m_vehicle != null)
         {
-            m_controller.m_vehicle.m_vehicleProperties.m_enableDriveAssist = !m_controller.m_vehicle.m_vehicleProperties.m_enableDriveAssist;
+            m_controller.m_vehicle.m_vehicleProperty.m_enableDriveAssist = !m_controller.m_vehicle.m_vehicleProperty.m_enableDriveAssist;
         }
 
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame &&

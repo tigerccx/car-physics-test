@@ -206,7 +206,7 @@ public class VehicleDebugWindow : EditorWindow
         Transform vehicleTransform = vehicle.transform;
         Vector3 velocity = body.linearVelocity;
         Vector3 angularVelocity = body.angularVelocity;
-        B3DVehicle.DrivingGear gear = VehiclePhysics.GetCurrentGear(vehicle.m_vehicleProperties, vehicle.m_vehicleState);
+        B3DVehicle.DrivingGear gear = VehiclePhysics.GetCurrentGear(vehicle.m_vehicleProperty, vehicle.m_vehicleState);
         target.Speed = velocity.magnitude;
         target.SpeedMeasured = vehicle.m_vehicleState.m_measuredVehicleSpeed;
         target.SpeedKmH = target.Speed * 3.6f;
@@ -214,7 +214,7 @@ public class VehicleDebugWindow : EditorWindow
         target.EngineNetTorque = vehicle.m_vehicleState.m_engineNetOutputTorque;
         target.GearName = gear.m_gearName;
         target.GearBoxGearRatio = gear.m_gearRatio;
-        target.TotalGearRatio = VehiclePhysics.GetCurrentGearRatio(vehicle.m_vehicleProperties, vehicle.m_vehicleState);
+        target.TotalGearRatio = VehiclePhysics.GetCurrentGearRatio(vehicle.m_vehicleProperty, vehicle.m_vehicleState);
         target.WorldDirection = velocity.normalized;
         target.LocalVelocity = vehicleTransform.InverseTransformDirection(velocity);
         target.AngularSpeed = angularVelocity.magnitude;
@@ -278,6 +278,10 @@ public class VehicleDebugWindow : EditorWindow
             result.Longitudinal = wheelState.m_currentLongitudinalImpulse;
             result.DesiredLongitudinal = wheelState.m_desiredLongitudinalImpulse;
             result.AvailableGrip = Mathf.Max(0f, wheelState.m_availableGripImpulse);
+            result.LateralGripRadius = result.AvailableGrip * Mathf.Max(0f,
+                wheel.m_wheelProperties.m_gripLateralScale * wheelState.m_dynamicGripLateralScale);
+            result.LongitudinalGripRadius = result.AvailableGrip * Mathf.Max(0f,
+                wheel.m_wheelProperties.m_gripLongitudinalScale * wheelState.m_dynamicGripLongitudinalScale);
             result.UsedGrip = new Vector2(result.LateralImpulse, result.Longitudinal).magnitude;
             result.RPM = VehiclePhysics.AngularVToRPM(wheelState.m_currentAngularVelocity);
             result.LinearSpeed = wheelState.m_currentAngularVelocity * wheel.m_wheelProperties.m_wheelRadius;
@@ -489,9 +493,10 @@ public class VehicleDebugWindow : EditorWindow
                 // Reserve separate bands for the title, F label, circle, and B label.
                 Vector2 center = new Vector2(cell.center.x, cell.y + 60f);
                 float limit = Mathf.Min(cell.width * 0.22f, 24f);
-                float available = wheel.HasPhysicsData ? wheel.AvailableGrip : 0f;
-                // Both circles share a scale; zoom out together if grip exceeds the reference.
-                float scale = limit / Mathf.Max(defaultTractionImpulse, available, 0.00001f);
+                Vector2 radii = wheel.HasPhysicsData
+                    ? new Vector2(wheel.LateralGripRadius, wheel.LongitudinalGripRadius) : Vector2.zero;
+                // Use one scale for both axes and the reference, preserving the grip aspect ratio.
+                float scale = limit / Mathf.Max(defaultTractionImpulse, Mathf.Max(radii.x, radii.y), 0.00001f);
                 Handles.color = Color.gray;
                 Handles.DrawLine(center - Vector2.right * (limit + 8f), center + Vector2.right * (limit + 8f));
                 Handles.DrawLine(center - Vector2.up * (limit + 8f), center + Vector2.up * (limit + 8f));
@@ -504,15 +509,50 @@ public class VehicleDebugWindow : EditorWindow
                 if (!wheel.HasPhysicsData) continue;
                 Color blue = new Color(0.2f, 0.6f, 1f);
                 Handles.color = blue;
-                Handles.DrawWireDisc(center, Vector3.forward, available * scale);
-                Vector2 actual = Vector2.ClampMagnitude(new Vector2(wheel.LateralImpulse * wheel.LateralSign, -wheel.Longitudinal), available);
+                DrawGripEllipse(center, radii * scale);
+                Vector2 actual = ClampGripEllipse(new Vector2(wheel.LateralImpulse * wheel.LateralSign, -wheel.Longitudinal), radii);
                 Vector2 desired = new Vector2(wheel.DesiredLateral * wheel.LateralSign, -wheel.DesiredLongitudinal);
-                Arrow(center, desired, Mathf.Min(desired.magnitude * scale, limit + 15f), desired.magnitude > available ? Color.red : blue);
+                Arrow(center, desired, Mathf.Min(desired.magnitude * scale, limit + 15f),
+                    GripEllipseRatio(desired, radii) > 1.00001f ? Color.red : blue);
                 Handles.color = blue;
                 Handles.DrawSolidDisc(center + actual * scale, Vector3.forward, 3f);
             }
         }
         finally { Handles.color = previous; Handles.EndGUI(); }
+    }
+
+    private static void DrawGripEllipse(Vector2 center, Vector2 radii)
+    {
+        if (radii.x == 0f || radii.y == 0f)
+        {
+            if (radii == Vector2.zero) Handles.DrawSolidDisc(center, Vector3.forward, 1f);
+            else Handles.DrawAAPolyLine(2f, center - radii, center + radii);
+            return;
+        }
+        Vector3[] points = new Vector3[65];
+        for (int i = 0; i < points.Length; i++)
+        {
+            float angle = i * (Mathf.PI * 2f / (points.Length - 1));
+            points[i] = center + new Vector2(Mathf.Cos(angle) * radii.x, Mathf.Sin(angle) * radii.y);
+        }
+        Handles.DrawAAPolyLine(2f, points);
+    }
+
+    // A zero semi-axis permits no impulse on that axis. Avoid 0/0 for airborne wheels.
+    private static float GripEllipseRatio(Vector2 impulse, Vector2 radii)
+    {
+        if ((radii.x <= 0f && impulse.x != 0f) || (radii.y <= 0f && impulse.y != 0f))
+            return float.PositiveInfinity;
+        Vector2 normalized = new Vector2(radii.x > 0f ? impulse.x / radii.x : 0f,
+            radii.y > 0f ? impulse.y / radii.y : 0f);
+        return normalized.magnitude;
+    }
+
+    private static Vector2 ClampGripEllipse(Vector2 impulse, Vector2 radii)
+    {
+        if (radii.x <= 0f) impulse.x = 0f;
+        if (radii.y <= 0f) impulse.y = 0f;
+        return impulse / Mathf.Max(1f, GripEllipseRatio(impulse, radii));
     }
 
     private void DrawInputPanel(Rect rect)
@@ -588,6 +628,7 @@ public class VehicleDebugWindow : EditorWindow
         public float SlipAngle = 0f, LateralImpulse = 0f, TurnAngle = 0f, TurnAngleLimit = 0f;
         public float AxialVelocity = 0f, Length = 0f, GroundDistance = 0f, DamperForce = 0f, SuspensionForce = 0f;
         public float DesiredLateral, Longitudinal, DesiredLongitudinal, AvailableGrip, UsedGrip;
+        public float LateralGripRadius, LongitudinalGripRadius;
         public float RPM, LinearSpeed, GroundSpeed, SlipRatio, Torque, BrakeTorque, Load, LateralSign;
         public bool Grounded = false;
     }

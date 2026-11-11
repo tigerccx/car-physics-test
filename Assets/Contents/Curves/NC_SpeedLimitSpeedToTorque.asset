@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ab3eea4c97503d4b91dfff1e518e6f9, type: 3}
   m_Name: NC_SpeedLimitSpeedToTorque
   m_EditorClassIdentifier: 
-  m_xScale: 3
-  m_yScale: 100
+  m_xScale: 1
+  m_yScale: 300
   m_curve:
     serializedVersion: 2
     m_Curve:

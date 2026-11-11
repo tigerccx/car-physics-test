@@ -13,6 +13,8 @@ namespace B3DVehicle
         public float m_mass = 25.0f;
         public float m_wheelRadius = 0.5f;
         public float m_gripScale = 1.0f;
+        public float m_gripLateralScale = 1.0f;
+        public float m_gripLongitudinalScale = 1.0f;
         [Description("Set to -1 to use automatic calculation from mass")]
         public float m_inertia = -1.0f;
         //TODO: Might need to distinguish this against the resistence engine and drive train provides
@@ -241,6 +243,9 @@ namespace B3DVehicle
         public bool m_isGrounded = false;
         public Vector3 m_currentGroundContact_ws = Vector3.zero;
 
+        public float m_dynamicGripLateralScale = 1.0f;
+        public float m_dynamicGripLongitudinalScale = 1.0f;
+
         public WheelTransitionalState m_transitional;
 
         public float m_desiredLateralImpulse = 0.0f;
@@ -304,8 +309,10 @@ namespace B3DVehicle
         public float m_engineNetOutputTorque = 0.0f;
 
         //Limiter
-        public bool m_limiterEngaged = false;
-        public float m_limitEngageTimer = 0.0f;
+        public bool m_revLimiterEngaged = false;
+        public float m_revLimitEngageTimer = 0.0f;
+
+        public bool m_speedLimiterEngaged = false;
 
         //Transmission - Gearbox
         public int m_idxCurrentGear = 0;
