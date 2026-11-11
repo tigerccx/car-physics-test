@@ -82,6 +82,44 @@ namespace B3DVehicle
             float drivingAxleRPMThres = speed / (2 * wheelRad * Mathf.PI);
             return drivingAxleRPMThres * differentialGearRatio;
         }
+
+        private static float SmoothStep(float x)
+        {
+            x = Mathf.Clamp01(x);
+            return x * x * (3f - 2f * x);
+        }
+
+        private static float ExponentialMovingAverage(float step, float filterScale)
+        {
+            return 1 - Mathf.Exp(-step * filterScale);
+        }
+
+        public static float GetSignedAngle(Quaternion q, Vector3 axis)
+        {
+            axis.Normalize();
+
+            Vector3 v = new Vector3(q.x, q.y, q.z);
+
+            float angle = 2f * Mathf.Atan2(
+                Vector3.Dot(v, axis),
+                q.w
+            ) * Mathf.Rad2Deg;
+
+            return Mathf.DeltaAngle(0f, angle);
+        }
+
+        public static void GetWheelPose(
+            in WheelState wheelState, bool isRightFacing,
+            out Vector3 pos, out Quaternion rot)
+        {
+            pos = wheelState.m_currentPos_ws;
+            Quaternion wheelStanding = Quaternion.FromToRotation(Vector3.up, Vector3.right * (isRightFacing ? 1f : -1f));
+            Vector3 dirRight = Vector3.Cross(wheelState.m_currentDirFoward_ws, wheelState.m_currentDirUp_ws);
+            Vector3 dirFacing = isRightFacing ? dirRight : -dirRight;
+            Quaternion wheelPose = Quaternion.LookRotation(wheelState.m_currentDirFoward_ws, wheelState.m_currentDirUp_ws);
+            Quaternion wheelRot = Quaternion.AngleAxis(-wheelState.m_currentRotAngle, dirRight);
+            rot = wheelRot * wheelPose * wheelStanding;
+        }
         #endregion
 
 
@@ -190,7 +228,16 @@ namespace B3DVehicle
             avgAngularVelocityNonDriving /= countNonDrivingWheels;
             avgRadiusNonDriving /= countNonDrivingWheels;
             float vehicleSpeed = avgAngularVelocityNonDriving * avgRadiusNonDriving;
+
+
             return vehicleSpeed;
+        }
+
+        public static float GetSmoothedVehicleSpeed(in List<Wheel> wheels, float currentVehicleSpeed, float timeStep, float filterTime = 0.3f)
+        {
+            float rawVehicleSpeed = GetVehicleSpeed(wheels);
+            float newVehicleSpeed = ExponentialMovingAverage(timeStep, 1f/filterTime)*(rawVehicleSpeed - currentVehicleSpeed) + currentVehicleSpeed;
+            return newVehicleSpeed;
         }
 
         private static bool CanShiftToReverse(
@@ -434,7 +481,7 @@ namespace B3DVehicle
                 //TODO: 当轴和引擎断开时，单独计算引擎本身的情况
             }
             vehicleState.m_engineRPM = AngularVToRPM(vehicleState.m_engineAngularVelocity);
-            vehicleState.m_measuredVehicleSpeed = GetVehicleSpeed(wheels);
+            vehicleState.m_measuredVehicleSpeed = GetSmoothedVehicleSpeed(wheels, vehicleState.m_measuredVehicleSpeed, deltaTime);
 
             // Change Gear
             if (vehicleProperty.m_gearBoxProperties.m_transmissionSystemType == TransmissionSystemType.ManualTransmission)
@@ -497,6 +544,245 @@ namespace B3DVehicle
             //Debug.Log($"engineNetOutputTorque {vehicleState.m_engineNetOutputTorque}");
         }
 
+        private static void CalculateDriftState(
+            in List<Wheel> wheels,
+            in VehicleProperties vehicleProperty,
+            ref VehicleState vehilcleState)
+        {
+            bool areRearsOverwhelmed = false;
+            foreach (Wheel wheel in wheels)
+            {
+                if (wheel.m_wheelProperties.m_isRear)
+                {
+                    areRearsOverwhelmed |= wheel.m_wheelState.m_transitional.m_desireExceedsMaxGrip;
+                }
+            }
+
+            if (!areRearsOverwhelmed)
+            {
+                vehilcleState.m_driftAmount = 0.0f;
+                vehilcleState.m_fullyDrifting = false;
+                return;
+            }
+
+            float driftAmountSmoothed = 0.0f;
+            float absSlipAngle = Mathf.Abs(vehilcleState.m_slipAngle);
+            if (vehilcleState.m_fullyDrifting)
+            {
+                float a = vehicleProperty.m_driftMeasurer.m_angleSideSlipReturn;
+                float b = vehicleProperty.m_driftMeasurer.m_angleSideSlipReturn + vehicleProperty.m_driftMeasurer.m_angleSideSlipSmooth;
+                float t = absSlipAngle - vehicleProperty.m_driftMeasurer.m_angleSideSlipReturn;
+                driftAmountSmoothed = Mathf.Clamp01(t / (b - a));
+
+                if (absSlipAngle <= a)
+                {
+                    vehilcleState.m_fullyDrifting = false;
+                }
+            }
+            else
+            {
+                float a = vehicleProperty.m_driftMeasurer.m_angleSideSlipStart;
+                float b = vehicleProperty.m_driftMeasurer.m_angleSideSlipStart + vehicleProperty.m_driftMeasurer.m_angleSideSlipSmooth;
+                float t = absSlipAngle - vehicleProperty.m_driftMeasurer.m_angleSideSlipStart;
+                driftAmountSmoothed = Mathf.Clamp01(t / (b - a));
+
+                if (absSlipAngle >= b)
+                {
+                    vehilcleState.m_fullyDrifting = true;
+                }
+
+                //Debug.Log($"driftAmountSmoothed{driftAmountSmoothed} = absSlipAngle{absSlipAngle} vs {a}-end{b}");
+            }
+
+            vehilcleState.m_driftAmount = driftAmountSmoothed;
+        }
+
+        //TODO: Seperate drive assist against wheel assist
+        private static void CalculateAndApplyDriveAssist(
+            float subStepDeltaTime,
+            in List<Wheel> wheels,
+            in VehicleContext vehicleContext,
+            in VehicleProperties vehicleProperty,
+            ref VehicleState vehicleState)
+        {
+            Vector3 up = Vector3.zero;
+            float steeringAngle = 0.0f;
+            bool toApply = true;
+            // Use average of wheels' up as correction plane
+            foreach (Wheel wheel in wheels)
+            {
+                up += wheel.m_wheelState.m_currentDirUp_ws;
+                steeringAngle += wheel.m_wheelState.m_currentSteerAngle;
+                toApply &= wheel.m_wheelState.m_isGrounded;
+            }
+            if (!toApply)
+            {
+                vehicleState.m_transitionalVelocity = vehicleState.m_b3dBody.velocity;
+                vehicleState.m_driftAssistAngularImpulse = Vector3.zero;
+                return;
+            }
+
+            up.Normalize();
+            steeringAngle /= wheels.Count;
+
+            Vector3 lastVelocity = vehicleState.m_transitionalVelocity;
+            
+            Vector3 lastPlanarVelocity = Vector3.ProjectOnPlane(lastVelocity, up);
+            Vector3 currentPlanarVelocity = Vector3.ProjectOnPlane(vehicleState.m_b3dBody.velocity, up);
+
+            Vector3 dirForward = Vector3.ProjectOnPlane(vehicleState.m_b3dBody.transform.forward, up);
+            Vector3 dirRight = Vector3.ProjectOnPlane(vehicleState.m_b3dBody.transform.right, up);
+            float currentPlanarVelocityLong = Vector3.Dot(currentPlanarVelocity, dirForward);
+            float currentPlanarVelocityLat = Vector3.Dot(currentPlanarVelocity, dirRight);
+
+            if (currentPlanarVelocityLong < EPS)
+            {
+                vehicleState.m_transitionalVelocity = vehicleState.m_b3dBody.velocity;
+                vehicleState.m_driftAssistAngularImpulse = Vector3.zero;
+                return;
+            }
+
+            //TODO: Slip Angle等状态计算给它提出来，成UpdateVehicleSubstepState
+            float slipAngle = Mathf.Atan2(currentPlanarVelocityLat, Mathf.Max(Mathf.Abs(currentPlanarVelocityLong), EPS)); //Positive -> right, Negative -> left
+            slipAngle = Mathf.Rad2Deg * slipAngle;
+            vehicleState.m_slipAngle = slipAngle;
+
+            // Check if the vehicle is drifting
+            CalculateDriftState(wheels, vehicleProperty, ref vehicleState);
+
+            float driftAmount = vehicleState.m_driftAmount;
+
+            float pendingVelocityRotAngle = Vector3.SignedAngle(lastPlanarVelocity, currentPlanarVelocity, up);
+
+            // Only when drifting
+            // To make vehicle rotation controllable during drifting
+            if (driftAmount > EPS)
+            {
+                // 计算操控和带来的辅助的速度转向速度
+                float throttle = vehicleContext.m_inputs.m_throttle;
+                float steering = vehicleContext.m_inputs.m_steering;
+                float standardTargetVelocity = vehicleProperty.m_driftControlAssistVelocity * subStepDeltaTime; //angle
+                float driftDirection = Mathf.Clamp(-currentPlanarVelocityLat / 1f, -1f, 1f);
+                float targetVelocityThrottleScale = Mathf.Max(throttle, 0f) * driftDirection * vehicleProperty.m_driftControlAssistThrottleScale;
+                float targetVelocitySteeringScale = steering * vehicleProperty.m_driftControlAssistSteeringScale;
+                float velocityTurnAssistScale = targetVelocityThrottleScale + targetVelocitySteeringScale;
+
+                //Debug.Log($"Assist Angle {velocityTurnAssistScale} = t{targetVelocityThrottleScale} + s{targetVelocitySteeringScale}");
+
+                float targetAssistVelocityTurningVelocityAngle = velocityTurnAssistScale * standardTargetVelocity;
+                pendingVelocityRotAngle = pendingVelocityRotAngle + targetAssistVelocityTurningVelocityAngle * driftAmount;
+
+                //Vector3 targetPlanarVelocity = Quaternion.AngleAxis(targetAssistVelocityTurningVelocityAngle, up) * currentPlanarVelocity;
+                //Vector3 velocityRotAssitImpulse = (targetPlanarVelocity - currentPlanarVelocity) * vehicleState.m_b3dBody.mass;
+            }
+
+            //Debug.Log($"Total Assist Angle {pendingVelocityRotAngle} = t{pendingVelocityRotAngle} + s{targetAssistVelocityTurningVelocityAngle}");
+
+            pendingVelocityRotAngle = pendingVelocityRotAngle * Mathf.Deg2Rad / subStepDeltaTime;
+            Vector3 pendingVelocityRotVelocity = pendingVelocityRotAngle * up;
+
+            Vector3 pendingBodyRotVelocity = Vector3.Project(vehicleState.m_b3dBody.angularVelocity, up);
+
+            Vector3 deltaDriftStablizerAngularVelocity = pendingVelocityRotVelocity - pendingBodyRotVelocity;
+
+            //// Limit maximum change by stablizer
+            //float deltaAngularVelocityLimit = vehicleProperty.testMaxDriftDeltaAngularVelocityAngle * subStepDeltaTime;
+            //Debug.Log($"Unlimited stablier accl {deltaAngularVelocity.magnitude}/{deltaAngularVelocityLimit}");
+
+            Matrix4x4 inverseWorldInertia = vehicleState.m_b3dBody.GetWorldInverseRotationalInertia();
+            float effectiveInverseInertia = Vector3.Dot(up, inverseWorldInertia.MultiplyVector(up));
+
+            if (effectiveInverseInertia < EPS)
+            {
+                vehicleState.m_transitionalVelocity = vehicleState.m_b3dBody.velocity;
+                vehicleState.m_driftAssistAngularImpulse = Vector3.zero;
+                return;
+            }
+
+            // Calculate angular impulse to assist stablizing drifting
+            Vector3 driftStablizeAngularImpulse = deltaDriftStablizerAngularVelocity / effectiveInverseInertia;
+            float driftAssistScale = 0.0f;
+            // Stablize drifting
+            if (vehicleProperty.m_driftAssistVehicleSlipAngleToAssistScaleCurve)
+            {
+                driftAssistScale = vehicleProperty.m_driftAssistVehicleSlipAngleToAssistScaleCurve.Evaluate(Mathf.Abs(slipAngle));
+                driftAssistScale = Mathf.Clamp01(driftAssistScale);
+                driftAssistScale *= driftAmount;
+
+                //Debug.Log($"driftAssistScale {driftAssistScale}");
+            }
+            float driftStablizerSpeedScale = SmoothStep((currentPlanarVelocityLong - vehicleProperty.m_driftAssistEnableThreshold) / vehicleProperty.m_driftAssistLowSpeedFadeIn);
+            float driftGain = ExponentialMovingAverage(vehicleProperty.m_driftControlAssistScale, subStepDeltaTime);
+            driftStablizeAngularImpulse *= driftAssistScale * driftStablizerSpeedScale * driftGain;
+            //Debug.Log($"final driftAssistScale {driftAssistScale * driftStablizerSpeedScale * driftGain}");
+
+            // Stablize straightline steering
+            // How much to turn the vehicle to face current velocity
+            float driveStablizerRotationAngle = Vector3.SignedAngle(dirForward, currentPlanarVelocity, up) * Mathf.Deg2Rad;
+            float bodyRotVelocity = Vector3.Dot(pendingBodyRotVelocity, up);
+            float targetDriveRotationVelocity = driveStablizerRotationAngle; //per 1s
+
+            float deltaRotationVelocity = (targetDriveRotationVelocity - bodyRotVelocity);
+
+            Vector3 driveStablizerAngularVelocity = deltaRotationVelocity * up;
+            Vector3 driveStablizeAngularImpulse = driveStablizerAngularVelocity / effectiveInverseInertia;
+
+            float driveAssistScale = 0.0f;
+            if (vehicleProperty.m_driveAssistVehicleSlipAngleToAssistScaleCurve)
+            {
+                driveAssistScale = vehicleProperty.m_driveAssistVehicleSlipAngleToAssistScaleCurve.Evaluate(Mathf.Abs(slipAngle));
+                driveAssistScale = Mathf.Clamp01(driveAssistScale);
+                driveAssistScale *= (1 - Mathf.Abs(vehicleContext.m_inputs.m_steering)); //Reduce drive assist when steering
+
+                driveAssistScale *= (1- driftAmount);
+
+                //Debug.Log($"driveAssistScale {driveAssistScale}");
+            }
+            float driveStablizerSpeedScale = SmoothStep((currentPlanarVelocityLong - vehicleProperty.m_driveAssistEnableThreshold) / vehicleProperty.m_driveAssistLowSpeedFadeIn);
+            float driveGain = ExponentialMovingAverage(vehicleProperty.m_driveControlAssistScale, subStepDeltaTime);
+            driveStablizeAngularImpulse *= driveAssistScale * driveStablizerSpeedScale * driveGain;
+            //Debug.Log($"final driveAssistScale {driveAssistScale * driveStablizerSpeedScale * driveGain}");
+
+            //velocityRotAssitImpulse *= speedScale;
+
+            //float steeringImpulse = steering * vehicleProperty.m_steeringAssistForce * subStepDeltaTime;
+            //angularImpulse += steeringImpulse * up;
+
+            Vector3 assistCombinedAngularImpulse = driftStablizeAngularImpulse + driveStablizeAngularImpulse;
+            vehicleState.m_driftAssistAngularImpulse = assistCombinedAngularImpulse;
+            if (assistCombinedAngularImpulse.sqrMagnitude > EPS * EPS)
+            {
+                // Assist vehicle rotation
+                vehicleState.m_b3dBody.ApplyAngularImpulse(assistCombinedAngularImpulse);
+            }
+
+            //TODO: 漂移的轨迹辅助有问题。。。
+
+            //vehicleState.m_driftAssistVelocityImpulse = velocityRotAssitImpulse;
+            //if (velocityRotAssitImpulse.sqrMagnitude > EPS * EPS)
+            //{
+            //    // Assist the turn
+            //    vehicleState.m_b3dBody.ApplyLinearImpulseToCenter(velocityRotAssitImpulse);
+            //}
+
+            //Debug.Log($"velocityRotV {pendingVelocityRotVelocity} | bodyRotV {vehicleState.m_b3dBody.angularVelocity} | delta {deltaAngularVelocity} | angularImpulse{angularImpulse.magnitude}");
+
+            vehicleState.m_transitionalVelocity = vehicleState.m_b3dBody.velocity;
+        }
+
+        public static void UpdateVehicleSubstep(
+            float subStepDeltaTime,
+            in VehicleContext vehicleContext,
+            in List<Wheel> wheels,
+            in VehicleProperties vehicleProperty,
+            ref VehicleState vehicleState)
+        {
+            if(vehicleProperty.m_enableDriveAssist)
+            {
+                CalculateAndApplyDriveAssist(subStepDeltaTime, wheels, vehicleContext, vehicleProperty, ref vehicleState);
+            }
+        }
+
         public static void UpdateWheelStatesFromVehicle(
             float deltaTime,
             in VehicleContext vehicleContext,
@@ -556,6 +842,7 @@ namespace B3DVehicle
                 }
             }
         }
+
         #endregion
 
         #region Suspension
@@ -713,6 +1000,7 @@ namespace B3DVehicle
             wheelState.m_transitional.m_angularVelocity = wheelState.m_currentAngularVelocity;
 
             wheelState.m_transitional.m_substepAccumImpulse = Vector2.zero;
+            wheelState.m_transitional.m_desireExceedsMaxGrip = false;
 
             wheelState.m_transitional.m_desiredDeltaLateralImpulse = 0.0f;
             wheelState.m_transitional.m_desiredDeltaLongitudinalImpulse = 0.0f;
@@ -744,11 +1032,11 @@ namespace B3DVehicle
             wheelState.m_currentLongitudinalImpulse = wheelState.m_transitional.m_accumGeneratedLongitudinalImpulse;
 
             wheelState.m_currentAngularVelocity = wheelState.m_transitional.m_angularVelocity;
-            
-            wheelState.m_currentAngularVelocity = wheelState.m_transitional.m_angularVelocity;
 
             wheelState.m_isABSEngaged = wheelState.m_transitional.m_ABSEngaged;
             wheelState.m_currentBrakeTorque = wheelState.m_transitional.m_accumBrakeTorque / wheelState.m_transitional.m_subStepCount;
+            
+            wheelState.m_currentRotAngle += wheelState.m_currentAngularVelocity * Mathf.Rad2Deg * Time.fixedDeltaTime;
         }
 
         private static void UpdateWheelEffectiveMassAtContact(
@@ -823,6 +1111,7 @@ namespace B3DVehicle
             ref VehicleState vehicleState)
         {
             InitWheelTransitionalStates(ref wheelState);
+            vehicleState.m_transitionalVelocity = vehicleState.m_b3dBody.velocity;
         }
 
         private static float CalculateABSBrakeTorque(
@@ -1079,7 +1368,10 @@ namespace B3DVehicle
                         Vector2 newAccumImpulse = wheelState.m_transitional.m_substepAccumImpulse + new Vector2(
                             wheelState.m_transitional.m_desiredDeltaLateralImpulse, 
                             wheelState.m_transitional.m_desiredDeltaLongitudinalImpulse);
-                        newAccumImpulse = Vector2.ClampMagnitude(newAccumImpulse, wheelState.m_transitional.m_maxGripImpulse);
+                        float maxGripImpulse = wheelState.m_transitional.m_maxGripImpulse;
+                        newAccumImpulse = Vector2.ClampMagnitude(newAccumImpulse, maxGripImpulse);
+
+                        wheelState.m_transitional.m_desireExceedsMaxGrip = newAccumImpulse.sqrMagnitude > maxGripImpulse * maxGripImpulse;
 
                         Vector2 clampedCorrectionImpulse = newAccumImpulse - wheelState.m_transitional.m_substepAccumImpulse;
                         float deltaLateralImpulse = clampedCorrectionImpulse.x;

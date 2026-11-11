@@ -27,6 +27,7 @@ namespace B3DVehicle
         
         public bool m_isSteerable = false;
         public bool m_isConnectedToDriveTrain = false;
+        public bool m_isRear = false;
 
         public float m_allowedAngle = 40.0f;
     };
@@ -97,6 +98,15 @@ namespace B3DVehicle
     }
 
     [System.Serializable]
+    public class VehicleDriftMeasurer
+    {
+        public float m_angleSideSlipStart = 10.0f;
+        public float m_angleSideSlipReturn = 5.0f;
+        public float m_angleSideSlipSmooth = 5.0f;
+        public float m_slipAngleRear = 8.0f;
+    }
+
+    [System.Serializable]
     public class VehicleProperties
     {
         [Header("Engine")]
@@ -114,6 +124,24 @@ namespace B3DVehicle
         public bool m_enableABS = true;
         public float m_ABSOptimalSlipRatio = 0f;
         public NormalizedCurveAsset m_ABSSlipToTorqueScaleCurve;
+
+        [Header("Assist")]
+        public bool m_enableDriveAssist = true;
+        public VehicleDriftMeasurer m_driftMeasurer;
+        public NormalizedCurveAsset m_driftAssistVehicleSlipAngleToAssistScaleCurve;
+        public NormalizedCurveAsset m_driveAssistVehicleSlipAngleToAssistScaleCurve;
+        // Drift assist will only engage when last and current velocity are both above this value. 
+        public float m_driftAssistEnableThreshold = 5f;
+        public float m_driftAssistLowSpeedFadeIn = 5f;
+        //public float m_steeringAssistForce = 20.0f;
+        //public float testMaxDriftDeltaAngularVelocityAngle = 15.0f;
+        public float m_driftControlAssistVelocity = 20.0f;
+        public float m_driftControlAssistScale = 10f;
+        public float m_driftControlAssistThrottleScale = 0.2f;
+        public float m_driftControlAssistSteeringScale = 0.8f;
+        public float m_driveAssistEnableThreshold = 15f;
+        public float m_driveAssistLowSpeedFadeIn = 10f;
+        public float m_driveControlAssistScale = 10f;
 
         [Header("Book Keeping")]
         [ReadOnly]
@@ -155,6 +183,7 @@ namespace B3DVehicle
         public float m_angularVelocity = 0.0f; //possitive = spin from back to front through top
 
         public Vector2 m_substepAccumImpulse = Vector2.zero;
+        public bool m_desireExceedsMaxGrip = false;
 
         public float m_desiredDeltaLateralImpulse = 0.0f;
         public float m_desiredDeltaLongitudinalImpulse = 0.0f;
@@ -199,6 +228,7 @@ namespace B3DVehicle
 
         //public Vector3 m_currentPos_ls = Vector3.zero;
         public Vector3 m_currentPos_ws = Vector3.zero;
+        public float m_currentRotAngle = 0.0f;
         public float m_effectiveMassAtContactLateral = 0.0f;
         public float m_effectiveMassAtContactLongitudinal = 0.0f;
 
@@ -289,5 +319,13 @@ namespace B3DVehicle
         public float m_driveOutputShaftTorque;
 
         public float m_antiRollTorque = 0;
+
+        //Drift Assist
+        public float m_driftAmount = 0.0f;
+        public bool m_fullyDrifting = false;
+        public Vector3 m_driftAssistAngularImpulse = Vector3.zero;
+        //public Vector3 m_driftAssistVelocityImpulse = Vector3.zero;
+        public Vector3 m_transitionalVelocity = Vector3.zero;
+        public float m_slipAngle = 0.0f;
     };
 }

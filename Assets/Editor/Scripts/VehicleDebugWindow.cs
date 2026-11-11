@@ -19,6 +19,8 @@ public class VehicleDebugWindow : EditorWindow
     private static readonly Color WheelColorLight = new Color(1f, 0.8f, 0.25f, 0.3f);
     private static readonly Color VelocityColor = new Color(0.3f, 1f, 0.6f);
     private static readonly Color YawColor = new Color(1f, 0.5f, 0.75f);
+    private static readonly Color DriftAngularColor = new Color(1f, 0.5f, 0.15f);
+    private static readonly Color DriftVelocityColor = new Color(0.65f, 0.55f, 1f);
 
     [MenuItem("Tools/Vehicle Debug")]
     public static void Open()
@@ -218,6 +220,11 @@ public class VehicleDebugWindow : EditorWindow
         target.AngularSpeed = angularVelocity.magnitude;
         target.WorldRotationAxis = angularVelocity.normalized;
         target.LocalYawSpeed = vehicleTransform.InverseTransformDirection(angularVelocity).y;
+        target.LocalDriftAngularImpulse = vehicleTransform.InverseTransformDirection(vehicle.m_vehicleState.m_driftAssistAngularImpulse);
+        //target.LocalDriftVelocityImpulse = vehicleTransform.InverseTransformDirection(vehicle.m_vehicleState.m_driftAssistVelocityImpulse);
+        target.FullyDrifting = vehicle.m_vehicleState.m_fullyDrifting;
+        target.SlipAngle = vehicle.m_vehicleState.m_slipAngle;
+        target.DriftAmount = vehicle.m_vehicleState.m_driftAmount;
         target.HasPhysicsData = true;
 
         Suspension[] suspensions = vehicle.GetComponentsInChildren<Suspension>();
@@ -312,6 +319,11 @@ public class VehicleDebugWindow : EditorWindow
         Value("Angular speed (rad/s)", data.AngularSpeed);
         VectorValue("Rotation axis (world, unit vector)", data.WorldRotationAxis);
         Value("Local Y angular speed (rad/s)", data.LocalYawSpeed);
+        Value("Slip angle (deg)", data.SlipAngle);
+        Row("Drift", data.HasPhysicsData ? data.DriftAmount.ToString() : "--");
+        Row("Fully Drifting", data.HasPhysicsData ? data.FullyDrifting.ToString() : "--");
+        Value("Drift angular Y (N·m·s)", data.LocalDriftAngularImpulse.y);
+        VectorValue("Drift impulse (local, N·s)", data.LocalDriftVelocityImpulse);
         GUILayout.Space(5f);
         GUILayout.Label("---Diagram---", compactBoldTitle);
         GUILayout.Label("Top: local +Z    Right: local +X");
@@ -319,6 +331,8 @@ public class VehicleDebugWindow : EditorWindow
         Legend("Wheel forward", WheelColor);
         Legend("Local XZ velocity", VelocityColor);
         Legend("Local Y rotation", YawColor);
+        Legend("Drift angular impulse (local Y)", DriftAngularColor);
+        Legend("Drift velocity impulse (local XZ)", DriftVelocityColor);
         GUILayout.Label("Arrow lengths are normalized.", compactMini);
         EditorGUILayout.EndVertical();
     }
@@ -445,6 +459,12 @@ public class VehicleDebugWindow : EditorWindow
                     // Share the velocity origin; positive local yaw turns the nose right.
                     Arrow(center, Vector2.right * Mathf.Sign(data.LocalYawSpeed), 42f, YawColor);
                 }
+                // Separate the assist origins from the velocity/yaw arrows for readability.
+                Vector2 assistOrigin = center + new Vector2(0f, 28f);
+                Arrow(assistOrigin, Project(data.LocalDriftVelocityImpulse), 48f, DriftVelocityColor);
+                if (Mathf.Abs(data.LocalDriftAngularImpulse.y) > 0.000001f)
+                    Arrow(assistOrigin + new Vector2(0f, 16f),
+                        Vector2.right * Mathf.Sign(data.LocalDriftAngularImpulse.y), 34f, DriftAngularColor);
             }
         }
         finally
@@ -540,6 +560,7 @@ public class VehicleDebugWindow : EditorWindow
     private sealed class DebugData
     {
         public bool HasInputData, BrakeInput, HandbrakeInput;
+        public bool FullyDrifting;
         public float ThrottleInput, SteeringInput;
         public bool HasPhysicsData;
         public Vector3 LocalNorth;
@@ -548,6 +569,9 @@ public class VehicleDebugWindow : EditorWindow
         public string GearName;
         public float GearBoxGearRatio = 0f, TotalGearRatio = 0f;
         public float AngularSpeed = 0f, LocalYawSpeed = 0f;
+        public float SlipAngle = 0f;
+        public float DriftAmount = 0f;
+        public Vector3 LocalDriftAngularImpulse, LocalDriftVelocityImpulse;
         public Vector3 WorldDirection = Vector3.zero, LocalVelocity = Vector3.zero, WorldRotationAxis = Vector3.zero;
         public readonly WheelDebugData[] Wheels =
         {

@@ -25,7 +25,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     private Box3DBody m_b3dBody;
     private List<Suspension> m_suspensions = new List<Suspension>();
     private List<Wheel> m_wheels = new List<Wheel>();
-    
+
     //TODO: 之后应该只分驱动轮与非驱动轮，转向轮与非转向轮。哪一对轮子共用一对差速器。
     private Wheel m_wheelFL = null;
     private Wheel m_wheelFR = null;
@@ -83,6 +83,11 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
             m_wheels.Add(wheel);
         }
 
+        foreach (Wheel wheel in m_wheels)
+        {
+            InitWheelMesh(wheel);
+        }
+
         Box3DDispatcher.Register(m_b3dBody.Body, OnPreIntegratePositions);
 
         //TODO: Temp here. 之后应该只分驱动轮与非驱动轮，转向轮与非转向轮。哪一对轮子共用一对差速器。
@@ -111,7 +116,7 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
 
     private void Update()
     {
-        
+        UpdateWheels();
     }
 
     private void CalculateInputState()
@@ -240,6 +245,40 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
         UpdateVehiclePhysics_ApplySuspensionForce();
     }
 
+    public void ResetPhysics(Vector3 position, Quaternion rotation)
+    {
+        if (m_b3dBody == null || !m_b3dBody.Body.IsValid)
+        {
+            return;
+        }
+
+        // Sleeping clears accumulated forces before the teleport wakes the body.
+        m_b3dBody.SetAwake(false);
+        m_b3dBody.SetTransform(position, rotation);
+        m_b3dBody.velocity = Vector3.zero;
+        m_b3dBody.angularVelocity = Vector3.zero;
+
+        m_throttleInput = 0f;
+        m_steeringInput = 0f;
+        m_brakeInput = false;
+        m_handbrakeInput = false;
+        m_gearChangeInput = 0;
+
+        m_vehicleState = new VehicleState { m_b3dBody = m_b3dBody };
+        m_vehicleContext = new VehicleContext();
+        foreach (Wheel wheel in m_wheels)
+        {
+            wheel.m_wheelState = new WheelState { m_transitional = new WheelTransitionalState() };
+        }
+        foreach (Suspension suspension in m_suspensions)
+        {
+            suspension.m_suspensionState = new SuspensionState();
+        }
+
+        InitVehiclePhysics();
+        UpdateWheels();
+    }
+
     public void InitVehiclePhysics()
     {
         for (int i = 0; i < m_suspensions.Count; ++i)
@@ -298,6 +337,13 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
                     m_suspensions,
                     m_wheels,
                     ref m_vehicleState);
+
+        VehiclePhysics.UpdateVehicleSubstep(
+            subStepDeltaTime,
+            m_vehicleContext,
+            m_wheels,
+            m_vehicleProperties,
+            ref m_vehicleState);
     }
 
     private void UpdateVehiclePhysics_PostPhysics()
@@ -350,6 +396,41 @@ public class B3DSimpleVehicle : MonoBehaviour, IBox3DFixedPreUpdate, IBox3DFixed
     public void Box3DPostPhysics()
     {
         UpdateVehiclePhysics_PostPhysics();
+    }
+
+
+    public void UpdateWheels()
+    {
+        UpdateWheel(m_wheelFL, false);
+        UpdateWheel(m_wheelFR, true);
+        UpdateWheel(m_wheelRL, false);
+        UpdateWheel(m_wheelRR, true);
+    }
+
+    private void InitWheelMesh(Wheel wheel)
+    {
+        if (!wheel.m_wheelMesh)
+        {
+            return;
+        }
+        Vector3 localScale = wheel.m_wheelMesh.transform.localScale;
+        localScale.x = localScale.z = wheel.m_wheelProperties.m_wheelRadius * 2f;
+        wheel.m_wheelMesh.transform.localScale = localScale;
+    }
+
+    private void UpdateWheel(Wheel wheel, bool isRightSide)
+    {
+        if (!wheel.m_wheelMesh)
+        {
+            return;
+        }
+
+        Vector3 position;
+        Quaternion rotation;
+        VehiclePhysics.GetWheelPose(wheel.m_wheelState, isRightSide, out position, out rotation);
+
+        wheel.m_wheelMesh.transform.position = position;
+        wheel.m_wheelMesh.transform.rotation = rotation;
     }
 
     #region Debug

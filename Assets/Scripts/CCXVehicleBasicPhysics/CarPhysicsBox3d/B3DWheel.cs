@@ -6,6 +6,7 @@ namespace B3DVehicle
 {
     public class Wheel : MonoBehaviour
     {
+        public GameObject m_wheelMesh;
         public WheelProperties m_wheelProperties;
         [ReadOnly]
         public WheelState m_wheelState;

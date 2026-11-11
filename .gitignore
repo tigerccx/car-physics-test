@@ -111,3 +111,6 @@ InitTestScene*.unity*
 # box3d unity ccv mod plugin (managed by https://github.com/tigerccx/box3d-unity-ccx-mod/)
 /Packages/box3d-unity-ccx-mod/
 Assets/TextMesh Pro/Documentation
+
+# Unity directory monitor temporary files
+~UnityDirMonSyncFile~*
